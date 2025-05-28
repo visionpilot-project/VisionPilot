@@ -1,8 +1,5 @@
-*.mov
-*.mp4
-*.h5
 *.zip
-*.pt
+*.mp4
 carla/debug_sign_crops
 lane_detection_cnn/dataset/
 traffic-sign/dataset/
