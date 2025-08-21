@@ -146,9 +146,9 @@ self-driving-car-simulation/
 - [x] Lane detection (U-Net, SCNN, Hough)
 
 **In Progress / Near-Term**
+- [ ] Train SCNN/U-Net lane classification performance & accuracy
 - [ ] Integrate all models into Carla simulation
 - [ ] Complete CARLA test scenario
-- [ ] Improve SCNN/U-Net lane classification performance & accuracy
 - [ ] Cleanup and modularize CARLA pipeline
 - [ ] Integrate vehicle control (autonomous driving logic)
 - [ ] Add evaluation scripts for all modules

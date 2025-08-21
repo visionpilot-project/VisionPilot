@@ -3,9 +3,10 @@ import numpy as np
 import time
 from ultralytics import YOLO
 import random
+from config.config import SIGN_DETECTION_MODEL, VIDEOS_DIR
 
-MODEL_PATH = "./traffic sign detection yolo/sign_detection.pt"
-VIDEO_PATH = "ams_driving_cropped.mp4"
+MODEL_PATH = SIGN_DETECTION_MODEL
+VIDEO_PATH = VIDEOS_DIR / "clips" / "city" / "ams-cut.mp4"
 
 def process_video():
     try:

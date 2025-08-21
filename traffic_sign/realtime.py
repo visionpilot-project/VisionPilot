@@ -5,6 +5,7 @@ from tensorflow.keras.models import load_model
 import pandas as pd
 import os
 import time
+from config.config import VIDEOS_DIR, SIGN_CLASSIFICATION_MODEL
 
 def load_class_names(csv_path):
     try:
@@ -38,21 +39,16 @@ def get_ordered_descriptions(class_names, ds_path):
         return list(class_names.values()), list(class_names.keys())
 
 def main():
-    MODEL_PATH = "sign_inference.h5"
+    MODEL_PATH = SIGN_CLASSIFICATION_MODEL
     CSV_PATH = "sign_dic.csv"
     DS_PATH = os.path.join("dataset", "Train")
     CONFIDENCE_THRESHOLD = 0.6
     
-    VIDEO_SOURCE = "ams_driving_cropped.mp4"
+    VIDEO_SOURCE= VIDEOS_DIR / "clips" / "city" / "ams-cut.mp4"
     
     print(f"Loading model from {MODEL_PATH}...")
-    try:
-        model = load_model(MODEL_PATH)
-        print("Model loaded successfully")
-    except Exception as e:
-        print(f"Error loading model: {e}")
-        model = load_model("sign_model.h5")
-        print("Loaded full model as fallback")
+    model = load_model(MODEL_PATH)
+    print("Model loaded successfully")
     
     class_names = load_class_names(CSV_PATH)
     ordered_descriptions, class_dirs = get_ordered_descriptions(class_names, DS_PATH)
