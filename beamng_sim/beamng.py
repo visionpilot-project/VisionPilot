@@ -4,6 +4,21 @@ from beamngpy.sensors import Camera
 import cv2
 import numpy as np
 
+class PIDController:
+    def __init__(self, Kp, Ki, Kd):
+        self.Kp = Kp
+        self.Ki = Ki
+        self.Kd = Kd
+        self.integral = 0
+        self.previous_error = 0
+
+    def update(self, error, dt):
+        self.integral += error * dt
+        derivative = (error - self.previous_error) / dt if dt > 0 else 0
+        output = self.Kp * error + self.Ki * self.integral + self.Kd * derivative
+        self.previous_error = error
+        return output
+
 
 beamng = BeamNGpy('localhost', 64256, home=r'D:\beamng-tech\BeamNG.tech.v0.36.4.0')
 beamng.open()
@@ -34,7 +49,8 @@ camera = Camera(
     is_render_depth=False,
 )
 
-autosteering_enabled = True
+pid = PIDController(Kp=0.5, Ki=0.05, Kd=0.1)
+dt = 0.1
 
 for _ in range(1000):
     beamng.control.step(10)
@@ -53,11 +69,19 @@ for _ in range(1000):
     else:
         last_lane_center = lane_center
 
+    # ADDED PID Controller Proportional Integral Derivative
+    steering = pid.update(deviation, dt)
 
-    steering = np.clip(-deviation / 2.0, -1, 1)
+    steering = max(min(steering, 1), -1)
 
-    vehicle.control(steering=steering, throttle=0.1)
-    
+    max_throttle = 1.0
+    k = 0.7
+
+    throttle = max_throttle * (1 - k * abs(steering))
+    throttle = max(throttle, 0.05)
+
+    vehicle.control(steering=steering, throttle=throttle)
+
     cv2.imshow('Lane Detection', result)
     
     if _ % 30 == 0:
