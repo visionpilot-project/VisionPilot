@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 import time
 import math
+from scipy import signal
 
 
 def yaw_to_quat(yaw_deg):
@@ -12,6 +13,17 @@ def yaw_to_quat(yaw_deg):
     w = math.cos(yaw / 2)
     z = math.sin(yaw / 2)
     return (0.0, 0.0, z, w)
+    
+def apply_butterworth_filter(value, buffer, b, a, max_size=10):
+    buffer.insert(0, value)
+    if len(buffer) > max_size:
+        buffer.pop()
+    
+    if len(buffer) >= 3:
+        filtered_value = signal.filtfilt(b, a, buffer)[0]
+        return filtered_value
+    else:
+        return value
 
 # PID Controller Setup
 class PIDController:
@@ -77,21 +89,16 @@ smooth_deviation = 0.0
 previous_steering = 0.0
 last_time = time.time()
 
+# Butterworth filter setup
+butter_order = 3
+butter_cutoff = 0.1
+butter_b, butter_a = signal.butter(butter_order, butter_cutoff)
+deviation_buffer = []
+deviation_buffer_max_size = 10
+
 alpha = 0.1 # smoothing factor for deviation (0-1). smaller = smoother/more lag
 max_delta = 0.03 # max steering change per loop
 base_throttle = 0.1 # baseline throttle
-
-baseline_deviation = 0.0
-baseline_samples = []
-for _ in range(10):
-    images = camera.stream()
-    img = np.array(images['colour'])
-    img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-    _, metrics = process_frame(img_bgr)
-    if 'deviation' in metrics:
-        baseline_samples.append(metrics['deviation'])
-baseline_deviation = np.mean(baseline_samples)
-print(f"Baseline deviation set to {baseline_deviation:.3f} m")
 
 try:
     for step_i in range(1000):
@@ -110,7 +117,7 @@ try:
         raw_deviation = metrics.get('deviation', None)
 
         if raw_deviation is not None:
-            deviation = raw_deviation - baseline_deviation
+            deviation = raw_deviation
         else:
             deviation = 0.0
 
@@ -127,13 +134,15 @@ try:
             deviation = raw_deviation
             last_lane_center = lane_center
 
-        smooth_deviation = alpha * deviation + (1.0 - alpha) * smooth_deviation
+        filtered_deviation = apply_butterworth_filter(deviation, deviation_buffer, butter_b, butter_a, deviation_buffer_max_size)
+        
+        smooth_deviation = alpha * filtered_deviation + (1.0 - alpha) * smooth_deviation
 
         deadband = 0.04
         if abs(smooth_deviation) < deadband:
             smooth_deviation = 0.0
 
-        max_jump = 0.2
+        max_jump = 0.5
         deviation_change = deviation - smooth_deviation
         if abs(deviation_change) > max_jump:
             deviation = smooth_deviation

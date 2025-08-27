@@ -52,14 +52,32 @@ def thresholds(image, ksize=3):
     return combined
 
 def color_threshold(image):
-    hls = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
-    s_channel = hls[:,:,2]
-    s_thresh_min = 170
-    s_thresh_max = 255
-    s_binary = np.zeros_like(s_channel)
-    s_binary[(s_channel >= s_thresh_min) & (s_channel <= s_thresh_max)] = 1
-
-    return s_binary
+    hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+    
+    # White lane lines
+    white_lower = np.array([0, 0, 170])
+    white_upper = np.array([80, 80, 255])
+    white_mask = cv2.inRange(hsv, white_lower, white_upper)
+    
+    # Yellow lane lines
+    yellow_lower = np.array([15, 80, 180])
+    yellow_upper = np.array([35, 255, 255])
+    yellow_mask = cv2.inRange(hsv, yellow_lower, yellow_upper)
+    
+    # Shadow areas - handle darker lane markings
+    shadow_lower = np.array([90, 15, 150])
+    shadow_upper = np.array([150, 80, 255])
+    shadow_mask = cv2.inRange(hsv, shadow_lower, shadow_upper)
+    
+    # Combine masks
+    combined_mask = cv2.bitwise_or(white_mask, yellow_mask)
+    combined_mask = cv2.bitwise_or(combined_mask, shadow_mask)
+    
+    # Create binary image
+    binary = np.zeros_like(hsv[:,:,0])
+    binary[combined_mask > 0] = 1
+    
+    return binary
 
 
 def combine_threshold(s_binary, combined):
@@ -67,6 +85,9 @@ def combine_threshold(s_binary, combined):
     combined_binary[(s_binary == 1) | (combined == 1)] = 1
 
     return combined_binary
+
+def dynamic_src_points(img_shape, speed, base_top_ratio=0.57, top_shift_factor=0.2):
+    
 
 
 def warp(img):
@@ -161,9 +182,8 @@ def slide_window(binary_warped, histogram):
     return ploty, left_fit, right_fit
 
 
-def measure_curvature(ploty, lines_info):
-    ym_per_pix = 30/720 
-    xm_per_pix = 3.7/700 
+def measure_curvature_and_deviation(ploty, lines_info, binary_warped):
+    ym_per_pix = 30/720
 
     leftx = lines_info['left_fitx']
     rightx = lines_info['right_fitx']
@@ -172,13 +192,23 @@ def measure_curvature(ploty, lines_info):
     rightx = rightx[::-1]  
 
     y_eval = np.max(ploty)
-    left_fit_cr = np.polyfit(ploty*ym_per_pix, leftx*xm_per_pix, 2)
-    right_fit_cr = np.polyfit(ploty*ym_per_pix, rightx*xm_per_pix, 2)
+
+    left_bottom = leftx[-1]
+    right_bottom = rightx[-1]
+    lane_width_pix = right_bottom - left_bottom
+    xm_per_pix = 3.7 / lane_width_pix
+
+    left_fit_cr = np.polyfit(ploty * ym_per_pix, leftx * xm_per_pix, 2)
+    right_fit_cr = np.polyfit(ploty * ym_per_pix, rightx * xm_per_pix, 2)
+
     left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
     right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
-    print(left_curverad, 'm', right_curverad, 'm')
-    
-    return left_curverad, right_curverad
+
+    lane_center = (left_bottom + right_bottom) / 2.0
+    vehicle_center = binary_warped.shape[1] / 2.0
+    deviation_m = (vehicle_center - lane_center) * xm_per_pix
+
+    return left_curverad, right_curverad, deviation_m, lane_center, vehicle_center
 
 
 def draw_lane_lines(original_image, warped_image, Minv, draw_info):
@@ -210,9 +240,8 @@ def process_frame(frame):
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     
     grad_binary = thresholds(rgb_frame)
-    # s_binary = color_threshold(rgb_frame)
-    # combined_binary = combine_threshold(s_binary, grad_binary)
-    combined_binary = grad_binary
+    color_binary = color_threshold(rgb_frame)
+    combined_binary = combine_threshold(color_binary, grad_binary)
 
     binary_warped, Minv = warp(combined_binary)
     
@@ -234,27 +263,17 @@ def process_frame(frame):
         
         result = draw_lane_lines(frame, binary_warped, Minv, draw_info)
         
-        ym_per_pix = 30/720
-        xm_per_pix = 3.7/700
-        
-        left_fit_cr = np.polyfit(ploty*ym_per_pix, left_fitx*xm_per_pix, 2)
-        right_fit_cr = np.polyfit(ploty*ym_per_pix, right_fitx*xm_per_pix, 2)
-        y_eval = np.max(ploty)
-        left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
-        right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
-        
-        lane_center = (left_fitx[-1] + right_fitx[-1]) / 2
-        vehicle_center = frame.shape[1] / 2
-        deviation = (vehicle_center - lane_center) * xm_per_pix
+        lines_info = {
+            'left_fitx': left_fitx,
+            'right_fitx': right_fitx
+        }
+        left_curverad, right_curverad, deviation, lane_center, vehicle_center = measure_curvature_and_deviation(ploty, lines_info, binary_warped)
         direction = '+' if deviation > 0 else '-'
-        
         curvature_text = f"Curvature: L={left_curverad:.1f}m, R={right_curverad:.1f}m"
         deviation_text = f"Deviation: {direction}{abs(deviation):.2f}m"
-        
         fontType = cv2.FONT_HERSHEY_SIMPLEX
         cv2.putText(result, curvature_text, (30, 60), fontType, 1.2, (255,255,255), 2)
         cv2.putText(result, deviation_text, (30, 110), fontType, 1.2, (255,255,255), 2)
-        
         metrics = {
             'left_curverad': left_curverad,
             'right_curverad': right_curverad,
@@ -277,21 +296,25 @@ def process_frame(frame):
 
 if __name__ == "__main__":
     import os
-    
+
     video_path = "videos/clips/city/miami-cut.mp4"
     if os.path.exists(video_path):
         cap = cv2.VideoCapture(video_path)
+        window_name = 'Lane Detection'
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(window_name, 640, 360)
+
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 break
-                
+
             result, metrics = process_frame(frame)
-            
-            cv2.imshow('Lane Detection', result)
+
+            cv2.imshow(window_name, result)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-                
+
         cap.release()
         cv2.destroyAllWindows()
     else:
