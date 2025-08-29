@@ -101,7 +101,6 @@ def apply_thresholds(image, debugger=None):
 
 
 def apply_thresholds_debug(image):
-    """Return all threshold binaries for debugging."""
     rgb_frame = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     
     grad_binary = gradient_thresholds(rgb_frame)

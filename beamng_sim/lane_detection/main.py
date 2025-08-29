@@ -7,17 +7,6 @@ import numpy as np
 
 
 def process_frame(frame, debugger=None):
-    """
-    Main function to process a frame for lane detection.
-    
-    Args:
-        frame: Input image frame
-        debugger: Optional debugger instance for detailed analysis
-    
-    Returns:
-        result_image: Image with lane overlay
-        metrics: Dictionary containing lane metrics
-    """
     try:
         # Step 1: Apply thresholds to create binary image
         binary_image = apply_thresholds(frame, debugger)

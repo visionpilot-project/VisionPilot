@@ -23,7 +23,6 @@ def draw_lane_overlay(original_image, warped_image, Minv, left_fitx, right_fitx,
 
 
 def add_text_overlay(image, left_curverad, right_curverad, deviation):
-    """Add text information to image."""
     direction = '+' if deviation > 0 else '-'
     curvature_text = f"Curvature: L={left_curverad:.1f}m, R={right_curverad:.1f}m"
     deviation_text = f"Deviation: {direction}{abs(deviation):.2f}m"

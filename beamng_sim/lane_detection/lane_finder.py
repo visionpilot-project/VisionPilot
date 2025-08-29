@@ -51,13 +51,11 @@ def sliding_window_search(binary_warped, histogram, debugger=None):
         if len(good_right_inds) > minpix:        
             rightx_current = int(np.mean(nonzerox[good_right_inds]))
 
-    # Concatenate indices
     try:
         left_lane_inds = np.concatenate(left_lane_inds)
         right_lane_inds = np.concatenate(right_lane_inds)
     except ValueError:
         print("No lane pixels found in sliding window search")
-        # Return safe default values
         ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0])
         left_fitx = np.full_like(ploty, binary_warped.shape[1] // 4)
         right_fitx = np.full_like(ploty, 3 * binary_warped.shape[1] // 4)
@@ -70,16 +68,13 @@ def sliding_window_search(binary_warped, histogram, debugger=None):
         
         return ploty, left_fit, right_fit, left_fitx, right_fitx
 
-    # Extract lane pixel positions
     leftx = nonzerox[left_lane_inds]
     lefty = nonzeroy[left_lane_inds] 
     rightx = nonzerox[right_lane_inds]
     righty = nonzeroy[right_lane_inds] 
 
-    # Check if we have enough points for polynomial fitting
     if len(leftx) < 50 or len(rightx) < 50:
         print(f"Insufficient lane pixels: left={len(leftx)}, right={len(rightx)}")
-        # Return empty/default values
         ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0])
         left_fitx = np.full_like(ploty, binary_warped.shape[1] // 4)  # Default left lane position
         right_fitx = np.full_like(ploty, 3 * binary_warped.shape[1] // 4)  # Default right lane position
@@ -93,27 +88,22 @@ def sliding_window_search(binary_warped, histogram, debugger=None):
         return ploty, left_fit, right_fit, left_fitx, right_fitx
 
     try:
-        # Fit polynomial
         left_fit = np.polyfit(lefty, leftx, 2)
         right_fit = np.polyfit(righty, rightx, 2)
 
-        # Generate y values for plotting
         ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0])
         left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
         right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
 
-        # Color the detected pixels
         out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
         out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
         
-        # Debug lane finding step
         if debugger:
             left_points = (lefty, leftx) if len(leftx) > 0 else ([], [])
             right_points = (righty, rightx) if len(rightx) > 0 else ([], [])
             debugger.debug_lane_finding(binary_warped, histogram, left_points, right_points, 
                                        left_fitx, right_fitx, ploty)
             
-            # Also create interactive plot for detailed inspection
             debugger.plot_lane_points_interactive(left_points, right_points, left_fitx, right_fitx, 
                                                 ploty, binary_warped)
         
@@ -121,7 +111,6 @@ def sliding_window_search(binary_warped, histogram, debugger=None):
         
     except Exception as e:
         print(f"Error in polynomial fitting: {e}")
-        # Return safe default values
         ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0])
         left_fitx = np.full_like(ploty, binary_warped.shape[1] // 4)
         right_fitx = np.full_like(ploty, 3 * binary_warped.shape[1] // 4)

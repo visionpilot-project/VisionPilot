@@ -2,8 +2,6 @@ import numpy as np
 
 
 class PIDController:
-    """Simple PID controller for steering control."""
-    
     def __init__(self, Kp=1.0, Ki=0.1, Kd=0.05, integral_limit=1.0):
         self.Kp = Kp
         self.Ki = Ki
@@ -14,7 +12,6 @@ class PIDController:
         self.integral = 0.0
         
     def update(self, error, dt):
-        """Update PID controller with current error and time delta."""
         if dt <= 0:
             dt = 0.01
             
@@ -38,6 +35,5 @@ class PIDController:
         return output
     
     def reset(self):
-        """Reset the PID controller state."""
         self.previous_error = 0.0
         self.integral = 0.0
