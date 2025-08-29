@@ -1,4 +1,8 @@
-from beamng_sim.lane_detection import process_frame
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from beamng_sim.lane_detection.main import process_frame
+from beamng_sim.pid_controller import PIDController
 from beamng_sim.pid_controller import PIDController
 from beamngpy import BeamNGpy, Scenario, Vehicle
 from beamngpy.sensors import Camera
@@ -9,7 +13,6 @@ import math
 
 
 def yaw_to_quat(yaw_deg):
-    """Convert yaw angle in degrees to quaternion."""
     yaw = math.radians(yaw_deg)
     w = math.cos(yaw / 2)
     z = math.sin(yaw / 2)
@@ -21,17 +24,18 @@ def main():
     beamng.open()
 
     scenario = Scenario('west_coast_usa', 'lane_detection')
-    vehicle = Vehicle('ego_vehicle', model='etk800', licence='PYTHON')
+    vehicle = Vehicle('ego_vehicle', model='etk800', licence='JULIAN')
+    #vehicle = Vehicle('Q8', model='adroniskq8', licence='JULIAN')
 
     # Spawn positions rotation conversion
     rot_city = yaw_to_quat(-133.506 + 180)
     rot_highway = yaw_to_quat(-135.678)
 
     # Street Spawn
-    scenario.add_vehicle(vehicle, pos=(-730.212, 94.630, 118.517), rot_quat=rot_city)
+    #scenario.add_vehicle(vehicle, pos=(-730.212, 94.630, 118.517), rot_quat=rot_city)
     
     # Highway Spawn
-    # scenario.add_vehicle(vehicle, pos=(-287.210, 73.609, 112.363), rot_quat=rot_highway)
+    scenario.add_vehicle(vehicle, pos=(-287.210, 73.609, 112.363), rot_quat=rot_highway)
 
     scenario.make(beamng)
     beamng.scenario.load(scenario)
@@ -52,11 +56,13 @@ def main():
         is_render_colours=True,
     )
 
-    pid = PIDController(Kp=0.8, Ki=0.02, Kd=0.15)
+    # Lower PID gains for smoother steering
+    pid = PIDController(Kp=0.15, Ki=0.005, Kd=0.04)
 
-    base_throttle = 0.15
-    steering_bias = 0.02  # Small bias to counter drift
-    max_steering_change = 0.1  # Maximum steering change per frame
+    # Lower base throttle for gentler acceleration
+    base_throttle = 0.08
+    steering_bias = 0
+    max_steering_change = 0.08
     
     previous_steering = 0.0
     last_time = time.time()
@@ -72,24 +78,35 @@ def main():
             
             images = camera.stream()
             img = np.array(images['colour'])
-            img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
-            result, metrics = process_frame(img_bgr)
+            # Enable debug display to see each step of the pipeline
+            result, metrics = process_frame(img, debug_display=True)
 
             deviation = metrics.get('deviation', 0.0)
-            
-            if deviation is None or abs(deviation) > 1.0:
+            lane_center = metrics.get('lane_center', None)
+            vehicle_center = metrics.get('vehicle_center', None)
+
+            if (deviation is None or lane_center is None or vehicle_center is None):
+                deviation = 0.0
+                lane_center = 0.0
+                vehicle_center = 0.0
+
+            try:
+                if abs(deviation) > 1.0:
+                    deviation = 0.0
+            except Exception:
                 deviation = 0.0
 
+
             steering = pid.update(-deviation, dt)
-            
+
             steering += steering_bias
             steering = np.clip(steering, -1.0, 1.0)
-            
+
             steering_change = steering - previous_steering
             if abs(steering_change) > max_steering_change:
                 steering = previous_steering + np.sign(steering_change) * max_steering_change
-            
+
             previous_steering = steering
 
             throttle = base_throttle * (1.0 - 0.3 * abs(steering))
@@ -97,10 +114,11 @@ def main():
 
             vehicle.control(steering=steering, throttle=throttle, brake=0.0)
 
-            cv2.imshow('Lane Detection', result)
+            cv2.imshow('Lane Detection', cv2.cvtColor(result, cv2.COLOR_RGB2BGR))
 
-            if step_i % 30 == 0:
+            if step_i % 20 == 0:
                 print(f"[{step_i}] Deviation: {deviation:.3f}m | Steering: {steering:.3f} | Throttle: {throttle:.3f}")
+                print(f"Frame {step_i}: lane_center={lane_center}, vehicle_center={vehicle_center}")
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break

@@ -77,37 +77,32 @@ def color_threshold(image):
 
 
 def combine_thresholds(color_binary, gradient_binary):
-    combined_binary = np.zeros_like(gradient_binary)
-    combined_binary[(color_binary == 1) | (gradient_binary == 1)] = 1
+    combined_binary = np.zeros_like(color_binary)
+    combined_binary[color_binary == 1] = 1
+    combined_binary[(color_binary == 1) & (gradient_binary == 1)] = 1
     return combined_binary
 
 
-def apply_thresholds(image, debugger=None):
-    rgb_frame = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    
-    grad_binary = gradient_thresholds(rgb_frame)
-    color_binary = color_threshold(rgb_frame)
+def apply_thresholds(image, debugger=None, debug_display=False):
+    grad_binary = gradient_thresholds(image)
+    color_binary = color_threshold(image)
     combined_binary = combine_thresholds(color_binary, grad_binary)
-
-    # ONLY OVERLAPPING
-
-    combined_binary = np.zeros_like(color_binary)
-    combined_binary[(color_binary == 1) & (grad_binary == 1)] = 1
+    
+    if debug_display:
+        grad_display = np.dstack((grad_binary, grad_binary, grad_binary)) * 255
+        cv2.imshow('1a. Gradient Threshold', grad_display)
+        
+        color_display = np.dstack((color_binary, color_binary, color_binary)) * 255
+        cv2.imshow('1b. Color Threshold', color_display)
+        
+        union_binary = combine_thresholds(color_binary, grad_binary)
+        union_display = np.dstack((union_binary, union_binary, union_binary)) * 255
+        cv2.imshow('1c. Combined (Union)', union_display)
+        
+        intersection_display = np.dstack((combined_binary, combined_binary, combined_binary)) * 255
+        cv2.imshow('1d. Combined (Intersection)', intersection_display)
     
     if debugger:
         debugger.debug_thresholding(image, grad_binary, color_binary, combined_binary)
     
     return combined_binary
-
-
-def apply_thresholds_debug(image):
-    rgb_frame = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    
-    grad_binary = gradient_thresholds(rgb_frame)
-    color_binary = color_threshold(rgb_frame)
-    
-    # Use logical AND for the combined binary - only keep pixels where both color and gradient agree
-    combined_binary = np.zeros_like(color_binary)
-    combined_binary[(color_binary == 1) & (grad_binary == 1)] = 1
-    
-    return grad_binary, color_binary, combined_binary

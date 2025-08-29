@@ -46,10 +46,21 @@ def sliding_window_search(binary_warped, histogram, debugger=None):
         left_lane_inds.append(good_left_inds)
         right_lane_inds.append(good_right_inds)
         
+        max_jump = 80  # maximum allowed jump in pixels
         if len(good_left_inds) > minpix:
-            leftx_current = int(np.mean(nonzerox[good_left_inds]))
+            new_leftx = int(np.mean(nonzerox[good_left_inds]))
+            if abs(new_leftx - leftx_current) > max_jump:
+                print(f"Left window jump too far: {new_leftx-leftx_current} pixels, limiting jump.")
+                leftx_current += np.sign(new_leftx - leftx_current) * max_jump
+            else:
+                leftx_current = new_leftx
         if len(good_right_inds) > minpix:        
-            rightx_current = int(np.mean(nonzerox[good_right_inds]))
+            new_rightx = int(np.mean(nonzerox[good_right_inds]))
+            if abs(new_rightx - rightx_current) > max_jump:
+                print(f"Right window jump too far: {new_rightx-rightx_current} pixels, limiting jump.")
+                rightx_current += np.sign(new_rightx - rightx_current) * max_jump
+            else:
+                rightx_current = new_rightx
 
     try:
         left_lane_inds = np.concatenate(left_lane_inds)
@@ -73,6 +84,55 @@ def sliding_window_search(binary_warped, histogram, debugger=None):
     rightx = nonzerox[right_lane_inds]
     righty = nonzeroy[right_lane_inds] 
 
+    if not hasattr(sliding_window_search, 'left_lane_pos_history'):
+        sliding_window_search.left_lane_pos_history = []
+    if not hasattr(sliding_window_search, 'right_lane_pos_history'):
+        sliding_window_search.right_lane_pos_history = []
+
+    if len(leftx) > 0:
+        current_left_pos = np.median(leftx)
+        sliding_window_search.left_lane_pos_history.append(current_left_pos)
+        if len(sliding_window_search.left_lane_pos_history) > 30:
+            sliding_window_search.left_lane_pos_history.pop(0)
+        avg_left_pos = np.mean(sliding_window_search.left_lane_pos_history)
+        if abs(current_left_pos - avg_left_pos) > 60:  # threshold in pixels
+            print(f"Left lane jump too far from history: {current_left_pos} vs avg {avg_left_pos:.1f}, ignoring")
+            leftx = np.array([])
+            lefty = np.array([])
+
+    if len(rightx) > 0:
+        current_right_pos = np.median(rightx)
+        sliding_window_search.right_lane_pos_history.append(current_right_pos)
+        if len(sliding_window_search.right_lane_pos_history) > 30:
+            sliding_window_search.right_lane_pos_history.pop(0)
+        avg_right_pos = np.mean(sliding_window_search.right_lane_pos_history)
+        if abs(current_right_pos - avg_right_pos) > 60:  # threshold in pixels
+            print(f"Right lane jump too far from history: {current_right_pos} vs avg {avg_right_pos:.1f}, ignoring")
+            rightx = np.array([])
+            righty = np.array([])
+    if not hasattr(sliding_window_search, 'left_points_history'):
+        sliding_window_search.left_points_history = []
+        sliding_window_search.right_points_history = []
+
+    sliding_window_search.left_points_history.append(len(leftx))
+    sliding_window_search.right_points_history.append(len(rightx))
+
+    if len(sliding_window_search.left_points_history) > 30:
+        sliding_window_search.left_points_history.pop(0)
+    if len(sliding_window_search.right_points_history) > 30:
+        sliding_window_search.right_points_history.pop(0)
+
+    avg_left_points = np.mean(sliding_window_search.left_points_history) if sliding_window_search.left_points_history else 0
+    avg_right_points = np.mean(sliding_window_search.right_points_history) if sliding_window_search.right_points_history else 0
+
+    if avg_left_points > 0 and len(leftx) > avg_left_points * 1.7:
+        print(f"Ignoring left lane: {len(leftx)} points vs avg {avg_left_points:.1f}")
+        leftx = np.array([])
+        lefty = np.array([])
+    if avg_right_points > 0 and len(rightx) > avg_right_points * 1.7:
+        print(f"Ignoring right lane: {len(rightx)} points vs avg {avg_right_points:.1f}")
+        rightx = np.array([])
+        righty = np.array([])
     if len(leftx) < 50 or len(rightx) < 50:
         print(f"Insufficient lane pixels: left={len(leftx)}, right={len(rightx)}")
         ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0])

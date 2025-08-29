@@ -5,9 +5,13 @@ def perspective_warp(img, speed=0, debugger=None):
     img_size = (img.shape[1], img.shape[0])
     w, h = img_size
 
-    # Baseline city src points
-    left_bottom  = [118, 608]
-    right_bottom = [1077, 596]
+
+    ref_w, ref_h = 1278, 720
+    scale_w = w / ref_w
+    scale_h = h / ref_h
+
+    left_bottom  = [118, 590]
+    right_bottom = [1077, 590]
     top_right    = [730, 408]
     top_left     = [519, 408]
 
@@ -16,11 +20,12 @@ def perspective_warp(img, speed=0, debugger=None):
     top_shift = -40 * speed_norm  # move up for higher speed (adjust as needed)
     side_shift = 100 * speed_norm
 
+    # Scale src points to current image size
     src = np.float32([
-        left_bottom,
-        right_bottom,
-        [top_right[0] - side_shift, top_right[1] + top_shift],
-        [top_left[0] + side_shift,  top_left[1]  + top_shift]
+        [left_bottom[0] * scale_w, left_bottom[1] * scale_h],
+        [right_bottom[0] * scale_w, right_bottom[1] * scale_h],
+        [(top_right[0] - side_shift) * scale_w, (top_right[1] + top_shift) * scale_h],
+        [(top_left[0] + side_shift) * scale_w,  (top_left[1]  + top_shift) * scale_h]
     ])
 
     dst = np.float32([
