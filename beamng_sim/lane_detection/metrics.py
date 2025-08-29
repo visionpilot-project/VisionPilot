@@ -46,7 +46,7 @@ def calculate_curvature_and_deviation(ploty, left_fitx, right_fitx, binary_warpe
                 calculate_curvature_and_deviation.outlier_count = 0
                 
                 # Reset lane width history if we've seen too many consecutive outliers
-                if calculate_curvature_and_deviation.consecutive_outliers >= 10:
+                if calculate_curvature_and_deviation.consecutive_outliers >= 7:
                     print("Resetting lane width history due to persistent outliers")
                     lane_width_history.clear()
                     calculate_curvature_and_deviation.consecutive_outliers = 0

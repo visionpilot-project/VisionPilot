@@ -23,7 +23,8 @@ def main():
     beamng = BeamNGpy('localhost', 64256, home=r'C:\Users\user\Documents\beamng-tech\BeamNG.tech.v0.36.4.0')
     beamng.open()
 
-    scenario = Scenario('west_coast_usa', 'lane_detection')
+    #scenario = Scenario('west_coast_usa', 'lane_detection_city')
+    scenario = Scenario('west_coast_usa', 'lane_detection_highway')
     vehicle = Vehicle('ego_vehicle', model='etk800', licence='JULIAN')
     #vehicle = Vehicle('Q8', model='adroniskq8', licence='JULIAN')
 
