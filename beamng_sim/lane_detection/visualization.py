@@ -30,7 +30,7 @@ def draw_lane_overlay(original_image, warped_image, Minv, left_fitx, right_fitx,
         return original_image
 
 
-def add_text_overlay(image, left_curverad, right_curverad, deviation):
+def add_text_overlay(image, left_curverad, right_curverad, deviation, avg_brightness):
     fontType = cv2.FONT_HERSHEY_SIMPLEX
     
     if left_curverad is None or right_curverad is None:
@@ -46,5 +46,7 @@ def add_text_overlay(image, left_curverad, right_curverad, deviation):
     
     cv2.putText(image, curvature_text, (30, 60), fontType, 1.2, (255, 255, 255), 2)
     cv2.putText(image, deviation_text, (30, 110), fontType, 1.2, (255, 255, 255), 2)
+
+    cv2.putText(image, f"Avg Brightness: {avg_brightness:.1f}", (30, 160), fontType, 1.2, (255, 255, 255), 2)
     
     return image

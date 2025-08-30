@@ -65,7 +65,7 @@ def process_frame(frame, speed=0, debugger=None, debug_display=False):
         
         # Step 5: Create visualization
         result = draw_lane_overlay(frame, binary_warped, Minv, left_fitx, right_fitx, ploty)
-        result = add_text_overlay(result, left_curverad, right_curverad, deviation)
+        result = add_text_overlay(result, left_curverad, right_curverad, deviation, avg_brightness)
         
         # Return metrics
         metrics = {

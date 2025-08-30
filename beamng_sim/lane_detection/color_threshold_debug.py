@@ -218,16 +218,16 @@ while True:
             adjust = int((avg_brightness - 190) * 0.8)
             w_v_min = min(w_v_min + adjust, w_v_max - 1)
             y_v_min = min(y_v_min + adjust, y_v_max - 1)
+        elif avg_brightness < 50:
+            adjust = int((50 - avg_brightness) * 2.5)
+            w_v_min = max(w_v_min - adjust, 15)  # allow V min to go as low as 15
+            y_v_min = max(y_v_min - adjust, 15)
+            s_s_min = max(s_s_min - int(adjust/2.5), 0)
         elif avg_brightness < 110:
             adjust = int((110 - avg_brightness) * 2.0)
             w_v_min = max(w_v_min - adjust, 5)
             y_v_min = max(y_v_min - adjust, 5)
             s_s_min = max(s_s_min - int(adjust/2), 0)
-        elif avg_brightness < 50:
-            adjust = int((50 - avg_brightness) * 4.0)
-            w_v_min = max(w_v_min - adjust, 1)
-            y_v_min = max(y_v_min - adjust, 1)
-            s_s_min = max(s_s_min - int(adjust/1.5), 0)
         
 
         cv2.setTrackbarPos("H min", "White Mask", w_h_min)

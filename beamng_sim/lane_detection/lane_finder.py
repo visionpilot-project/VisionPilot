@@ -133,19 +133,37 @@ def sliding_window_search(binary_warped, histogram, debugger=None):
         print(f"Ignoring right lane: {len(rightx)} points vs avg {avg_right_points:.1f}")
         rightx = np.array([])
         righty = np.array([])
+        
+    if not hasattr(sliding_window_search, 'grace_counter'):
+        sliding_window_search.grace_counter = 0
+        sliding_window_search.last_valid = None
+
     if len(leftx) < 50 or len(rightx) < 50:
         print(f"Insufficient lane pixels: left={len(leftx)}, right={len(rightx)}")
-        ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0])
-        left_fitx = np.full_like(ploty, binary_warped.shape[1] // 4)  # Default left lane position
-        right_fitx = np.full_like(ploty, 3 * binary_warped.shape[1] // 4)  # Default right lane position
-        left_fit = np.array([0, 0, binary_warped.shape[1] // 4])
-        right_fit = np.array([0, 0, 3 * binary_warped.shape[1] // 4])
-        
+        if sliding_window_search.last_valid is not None and sliding_window_search.grace_counter < 8:
+            print(f"Using last valid lane positions (grace {sliding_window_search.grace_counter}/8)")
+            sliding_window_search.grace_counter += 1
+            ploty, left_fit, right_fit, left_fitx, right_fitx = sliding_window_search.last_valid
+        else:
+            ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0])
+            left_fitx = np.full_like(ploty, binary_warped.shape[1] // 4)
+            right_fitx = np.full_like(ploty, 3 * binary_warped.shape[1] // 4)
+            left_fit = np.array([0, 0, binary_warped.shape[1] // 4])
+            right_fit = np.array([0, 0, 3 * binary_warped.shape[1] // 4])
+            sliding_window_search.grace_counter = 0
+            sliding_window_search.last_valid = None
         if debugger:
             debugger.debug_lane_finding(binary_warped, histogram, ([], []), ([], []), 
                                        left_fitx, right_fitx, ploty)
-        
         return ploty, left_fit, right_fit, left_fitx, right_fitx
+
+    sliding_window_search.grace_counter = 0
+    ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0])
+    left_fit = np.polyfit(lefty, leftx, 2)
+    right_fit = np.polyfit(righty, rightx, 2)
+    left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
+    right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
+    sliding_window_search.last_valid = (ploty, left_fit, right_fit, left_fitx, right_fitx)
 
     try:
         left_fit = np.polyfit(lefty, leftx, 2)

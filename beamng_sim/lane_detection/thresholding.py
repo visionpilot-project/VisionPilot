@@ -49,28 +49,53 @@ def gradient_thresholds(image, ksize=3, avg_brightness=None):
 
 
 def color_threshold(image, avg_brightness=None):
-    hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-    
-    # White lane lines
-    white_lower = np.array([0, 0, 170])
-    white_upper = np.array([80, 80, 255])
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+    # Default HSV thresholds
+    w_h_min, w_h_max = 51, 82
+    w_s_min, w_s_max = 0, 27
+    w_v_min, w_v_max = 51, 204
+
+    y_h_min, y_h_max = 81, 180
+    y_s_min, y_s_max = 150, 201
+    y_v_min, y_v_max = 180, 255
+
+    s_h_min, s_h_max = 129, 180
+    s_s_min, s_s_max = 37, 103
+    s_v_min, s_v_max = 102, 201
+
+    # Adaptive logic based on avg_brightness
+    if avg_brightness is not None:
+        if avg_brightness > 190:
+            adjust = int((avg_brightness - 190) * 0.8)
+            w_v_min = min(w_v_min + adjust, w_v_max - 1)
+            y_v_min = min(y_v_min + adjust, y_v_max - 1)
+        elif avg_brightness < 50:
+            adjust = int((50 - avg_brightness) * 2.5)
+            w_v_min = max(w_v_min - adjust, 15)
+            y_v_min = max(y_v_min - adjust, 15)
+            s_s_min = max(s_s_min - int(adjust/2.5), 0)
+        elif avg_brightness < 110:
+            adjust = int((110 - avg_brightness) * 2.0)
+            w_v_min = max(w_v_min - adjust, 5)
+            y_v_min = max(y_v_min - adjust, 5)
+            s_s_min = max(s_s_min - int(adjust/2), 0)
+
+    white_lower = np.array([w_h_min, w_s_min, w_v_min])
+    white_upper = np.array([w_h_max, w_s_max, w_v_max])
     white_mask = cv2.inRange(hsv, white_lower, white_upper)
-    
-    # Yellow lane lines
-    yellow_lower = np.array([15, 80, 180])
-    yellow_upper = np.array([35, 255, 255])
+
+    yellow_lower = np.array([y_h_min, y_s_min, y_v_min])
+    yellow_upper = np.array([y_h_max, y_s_max, y_v_max])
     yellow_mask = cv2.inRange(hsv, yellow_lower, yellow_upper)
-    
-    # Shadow areas - handle darker lane markings
-    shadow_lower = np.array([90, 15, 150])
-    shadow_upper = np.array([150, 80, 255])
+
+    shadow_lower = np.array([s_h_min, s_s_min, s_v_min])
+    shadow_upper = np.array([s_h_max, s_s_max, s_v_max])
     shadow_mask = cv2.inRange(hsv, shadow_lower, shadow_upper)
-    
-    # Combine masks
+
     combined_mask = cv2.bitwise_or(white_mask, yellow_mask)
     combined_mask = cv2.bitwise_or(combined_mask, shadow_mask)
-    
-    # Create binary image
+
     binary = np.zeros_like(hsv[:,:,0])
     binary[combined_mask > 0] = 1
     return binary
