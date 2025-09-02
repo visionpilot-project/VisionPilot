@@ -7,7 +7,7 @@ from ultralytics import YOLO
 import tensorflow as tf
 import sys
 from PIL import Image
-from scripts.vehicle_pedestrian_detection import detect_vehicles_pedestrians
+from beamng_sim.vehicle_obstacle.vehicle_obstacle_detection import detect_vehicles_pedestrians
 from config.config import SIGN_DETECTION_MODEL, SIGN_CLASSIFICATION_MODEL
 
 IMG_SIZE = (30, 30)
