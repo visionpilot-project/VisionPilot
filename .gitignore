@@ -17,3 +17,5 @@ __pycache__/
 
 *.h5
 *.keras
+
+*.pkl
