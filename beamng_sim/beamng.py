@@ -11,8 +11,8 @@ import math
 
 from beamng_sim.lane_detection.main import lane_detection_process_frame
 from beamng_sim.sign.main import process_frame as sign_process_frame
-
 from beamng_sim.vehicle_obstacle.main import process_frame as vehicle_obstacle_process_frame
+from beamng_sim.lidar.main import process_frame as lidar_process_frame
 
 def yaw_to_quat(yaw_deg):
     yaw = math.radians(yaw_deg)
@@ -28,7 +28,7 @@ def sim_setup():
     #scenario = Scenario('west_coast_usa', 'lane_detection_city')
     scenario = Scenario('west_coast_usa', 'lane_detection_highway')
     vehicle = Vehicle('ego_vehicle', model='etk800', licence='JULIAN')
-    #vehicle = Vehicle('Q8', model='adroniskq8', licence='JULIAN')
+    #vehicle = Vehicle('Q8', model='rsq8_600_tfsi', licence='JULIAN')
 
     # Spawn positions rotation conversion
     rot_city = yaw_to_quat(-133.506 + 180)
@@ -106,6 +106,10 @@ def vehicle_obstacle_detection(img):
     vehicle_obstacle_detections, vehicle_img = vehicle_obstacle_process_frame(img, draw_detections=True)
     return vehicle_obstacle_detections, vehicle_img
 
+def lidar_detection(lidar_data, camera_detections=vehicle_obstacle_detection):
+    lidar_detections, lidar_img = lidar_process_frame(lidar_data)
+    return lidar_detections, lidar_img
+
 def main():
     beamng, scenario, vehicle, camera = sim_setup()
 
@@ -142,8 +146,13 @@ def main():
             cv2.imshow('Sign Detection', sign_img)
 
             # Vehicle & Obstacle Detection
-            _, vehicle_img = vehicle_obstacle_detection(img)
+            vehicle_detections, vehicle_img = vehicle_obstacle_detection(img)
             cv2.imshow('Vehicle and Pedestrian Detection', vehicle_img)
+
+            # Lidar
+            lidar_detections, lidar_img = lidar_process_frame(lidar_data, camera_detections=vehicle_detections)
+            cv2.imshow('LiDAR Detection', lidar_img)
+
 
             # Steering, throttle, brake inputs
             previous_steering = steering

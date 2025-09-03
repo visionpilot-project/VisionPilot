@@ -47,11 +47,12 @@ def collect_lidar_data():
         requested_update_time=0.01,
         is_using_shared_memory=True,
         is_360_mode=True,  # 360-degree mode
-        # Additional parameters for better coverage:
-        vertical_angle=26.9,  # Vertical field of view
-        vertical_resolution=128,  # Number of lasers/channels
-        max_distance=100,  # Maximum detection distance
-        pos=(0, -1.3, 1.8),  # Position on the vehicle (slightly higher than camera)
+        vertical_angle=30,  # Vertical field of view
+        vertical_resolution=256,  # Number of lasers/channels
+        density=10,
+        frequency=30,
+        max_distance=60,
+        pos=(0, 0.2, 1.8),
     )
     
     # Storage for collected point clouds
@@ -60,40 +61,23 @@ def collect_lidar_data():
     # Set up AI driver or manual control
     # vehicle.ai.set_mode("traffic")  # Use AI to drive the vehicle
     
-    try:
-        print("Collecting LiDAR data for 300 frames...")
-        
-        for i in range(300):
-            # Step the simulation
-            beamng.control.step(10)
-            
-            
-            # Collect LiDAR data every 5 frames
-            if i % 5 == 0:
-                readings_data = lidar.poll()
-                point_cloud = readings_data["pointCloud"]
-                all_point_clouds.append(point_cloud)
-                print(f"Collected frame {i}: {len(point_cloud)} points")
-            
-            # Save data periodically (every 50 frames)
-            if i % 50 == 0 and i > 0:
-                output_path = os.path.join(os.path.dirname(__file__), f"lidar_data_checkpoint_{i}.pkl")
-                with open(output_path, "wb") as f:
-                    pickle.dump(all_point_clouds, f)
-                print(f"Checkpoint saved: {len(all_point_clouds)} point clouds to {output_path}")
-        
-        # Save collected point clouds
-        output_path = os.path.join(os.path.dirname(__file__), "lidar_data.pkl")
-        with open(output_path, "wb") as f:
-            pickle.dump(all_point_clouds, f)
-        print(f"Saved {len(all_point_clouds)} point clouds to {output_path}")
-            
-    except Exception as e:
-        print(f"Error during data collection: {e}")
-    finally:
-        if 'lidar' in locals():
-            lidar.remove()
-        beamng.close()
+    import time
+    print("Collecting LiDAR data for 1 minute...")
+    start_time = time.time()
+    frame_count = 0
+    while time.time() - start_time < 60:
+        beamng.control.step(10)
+        readings_data = lidar.poll()
+        point_cloud = readings_data["pointCloud"]
+        all_point_clouds.append(point_cloud)
+        frame_count += 1
+        print(f"Collected frame {frame_count}: {len(point_cloud)} points")
+
+    # Save collected point clouds ONCE at the end
+    output_path = os.path.join(os.path.dirname(__file__), "lidar_data.pkl")
+    with open(output_path, "wb") as f:
+        pickle.dump(all_point_clouds, f)
+    print(f"Saved {len(all_point_clouds)} point clouds to {output_path}")
 
 
 if __name__ == "__main__":
