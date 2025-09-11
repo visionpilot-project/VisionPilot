@@ -164,7 +164,7 @@ def main():
             cv2.imshow('Lane Detection', cv2.cvtColor(result, cv2.COLOR_RGB2BGR))
 
             # Sign Detection
-            _, sign_img = sign_detection_classification(img)
+            sign_detections, sign_img = sign_detection_classification(img)
             cv2.imshow('Sign Detection', sign_img)
 
             # Vehicle & Obstacle Detection
@@ -174,7 +174,6 @@ def main():
             # Lidar
             lidar_detections, lidar_img = lidar_process_frame(lidar, camera_detections=vehicle_detections, beamng=beamng)
             cv2.imshow('LiDAR Detection', lidar_img)
-
 
             # Steering, throttle, brake inputs
             previous_steering = steering
