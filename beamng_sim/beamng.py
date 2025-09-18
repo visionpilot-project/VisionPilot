@@ -12,10 +12,13 @@ import numpy as np
 import time
 import math
 
-from beamng_sim.lane_detection.main import lane_detection_process_frame
+from beamng_sim.lane_detection.main import process_frame as lane_detection_process_frame
 from beamng_sim.sign.main import process_frame as sign_process_frame
 from beamng_sim.vehicle_obstacle.main import process_frame as vehicle_obstacle_process_frame
 from beamng_sim.lidar.main import process_frame as lidar_process_frame
+from beamng_sim.lidar.lidar_lane_debug import LiveLidarDebugWindow
+
+MODELS = {}
 
 def yaw_to_quat(yaw_deg):
     yaw = math.radians(yaw_deg)
@@ -23,13 +26,35 @@ def yaw_to_quat(yaw_deg):
     z = math.sin(yaw / 2)
     return (0.0, 0.0, z, w)
 
+def load_models():
+    from ultralytics import YOLO
+    import tensorflow as tf
+    from config.config import SIGN_DETECTION_MODEL, SIGN_CLASSIFICATION_MODEL
+    
+    from beamng_sim.sign.detect_classify import random_brightness
+    
+    print("Loading models...")
+    
+    # Load sign detection model
+    MODELS['sign_detect'] = YOLO(str(SIGN_DETECTION_MODEL))
+    print("Sign detection model loaded")
+    
+    # Load sign classification model with custom objects
+    MODELS['sign_classify'] = tf.keras.models.load_model(
+        str(SIGN_CLASSIFICATION_MODEL), 
+        custom_objects={"random_brightness": random_brightness}
+    )
+    print("Sign classification model loaded")
+    
+    print("All models loaded successfully!")
+
 
 def sim_setup():
     beamng = BeamNGpy('localhost', 64256, home=r'C:\Users\user\Documents\beamng-tech\BeamNG.tech.v0.36.4.0')
     beamng.open()
 
-    #scenario = Scenario('west_coast_usa', 'lane_detection_city')
-    scenario = Scenario('west_coast_usa', 'lane_detection_highway')
+    scenario = Scenario('west_coast_usa', 'lane_detection_city')
+    #scenario = Scenario('west_coast_usa', 'lane_detection_highway')
     vehicle = Vehicle('ego_vehicle', model='etk800', licence='JULIAN')
     #vehicle = Vehicle('Q8', model='rsq8_600_tfsi', licence='JULIAN')
 
@@ -38,10 +63,10 @@ def sim_setup():
     rot_highway = yaw_to_quat(-135.678)
 
     # Street Spawn
-    #scenario.add_vehicle(vehicle, pos=(-730.212, 94.630, 118.517), rot_quat=rot_city)
+    scenario.add_vehicle(vehicle, pos=(-730.212, 94.630, 118.517), rot_quat=rot_city)
     
     # Highway Spawn
-    scenario.add_vehicle(vehicle, pos=(-287.210, 73.609, 112.363), rot_quat=rot_highway)
+    #scenario.add_vehicle(vehicle, pos=(-287.210, 73.609, 112.363), rot_quat=rot_highway)
 
     scenario.make(beamng)
 
@@ -81,7 +106,7 @@ def sim_setup():
         pos=(0, 0.2, 1.8),
     )
 
-    return beamng, vehicle, camera, lidar
+    return beamng, scenario,vehicle, camera, lidar
 
 def get_vehicle_speed(vehicle):
 
@@ -93,7 +118,7 @@ def get_vehicle_speed(vehicle):
         speed_mps = 0.0
         speed_kph = 0.0
 
-    return speed_kph
+    return speed_mps, speed_kph
 
 def lane_detection(img, speed_kph, pid, previous_steering, base_throttle, steering_bias, max_steering_change):
     result, metrics = lane_detection_process_frame(img, speed=speed_kph, debug_display=True)
@@ -104,8 +129,10 @@ def lane_detection(img, speed_kph, pid, previous_steering, base_throttle, steeri
 
     if deviation is None or lane_center is None or vehicle_center is None:
         deviation, lane_center, vehicle_center = 0.0, 0.0, 0.0
-    if abs(deviation) > 1.0:
-        deviation = 0.0
+    
+    if abs(deviation) > 2.5:  # Increased from 1.0 to 2.5 meters - let car try to correct larger deviations
+        print(f"Large deviation detected: {deviation:.2f}m - attempting correction")
+        deviation = np.clip(deviation, -2.5, 2.5)
 
     steering = pid.update(-deviation, 0.01)  # dt can be passed in
     steering += steering_bias
@@ -128,12 +155,16 @@ def vehicle_obstacle_detection(img):
     vehicle_obstacle_detections, vehicle_img = vehicle_obstacle_process_frame(img, draw_detections=True)
     return vehicle_obstacle_detections, vehicle_img
 
-def lidar_detection(lidar_data, camera_detections=vehicle_obstacle_detection):
-    lidar_detections, lidar_img = lidar_process_frame(lidar_data)
-    return lidar_detections, lidar_img
+# def lidar_object_detections(lidar_data, camera_detections=vehicle_obstacle_detection):
+#     lidar_detections, lidar_obj_img = lidar_process_object_frame(lidar_data)
+#     return lidar_detections, lidar_obj_img
 
 def main():
+    load_models()
+    
     beamng, scenario, vehicle, camera, lidar = sim_setup()
+
+    debug_window = LiveLidarDebugWindow()
 
     pid = PIDController(Kp=0.15, Ki=0.005, Kd=0.04)
 
@@ -171,9 +202,11 @@ def main():
             vehicle_detections, vehicle_img = vehicle_obstacle_detection(img)
             cv2.imshow('Vehicle and Pedestrian Detection', vehicle_img)
 
-            # Lidar
-            lidar_detections, lidar_img = lidar_process_frame(lidar, camera_detections=vehicle_detections, beamng=beamng, speed=speed_kph)
-            cv2.imshow('LiDAR Detection', lidar_img)
+            # Lidar Road Boundaries
+            lidar_boundaries = lidar_process_frame(lidar, camera_detections=vehicle_detections, beamng=beamng, speed=speed_kph, debug_window=debug_window)
+
+            # Lidar Object Detection
+            # lidar_detections, lidar_obj_img = lidar_object_detections(lidar, camera_detections=vehicle_detections)
 
             # Steering, throttle, brake inputs
             previous_steering = steering
@@ -195,6 +228,7 @@ def main():
         vehicle.control(throttle=0, steering=0, brake=1.0)
         cv2.destroyAllWindows()
         beamng.close()
+        debug_window.close()
 
 if __name__ == "__main__":
     main()

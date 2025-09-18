@@ -10,6 +10,8 @@ from PIL import Image
 from beamng_sim.vehicle_obstacle.vehicle_obstacle_detection import detect_vehicles_pedestrians
 from config.config import SIGN_DETECTION_MODEL, SIGN_CLASSIFICATION_MODEL
 
+from tensorflow.keras.saving import register_keras_serializable
+
 IMG_SIZE = (30, 30)
 SIGN_MODEL_PATH = str(SIGN_DETECTION_MODEL)
 SIGN_CLASSIFY_MODEL_PATH = str(SIGN_CLASSIFICATION_MODEL)
@@ -22,7 +24,8 @@ def get_models_dict():
         return None
     except:
         return None
-    
+
+@register_keras_serializable()
 def random_brightness(x):
     return tf.image.random_brightness(x, max_delta=0.2)
 
@@ -41,14 +44,14 @@ def load_class_names(csv_path):
             name = row[desc_column]
             class_names[str(class_id)] = name
             
-        print(f"Loaded {len(class_names)} class names")
+        print(f"Loaded {len(class_names)} sign classes")
         return class_names
         
     except Exception as e:
         print(f"Error processing CSV: {e}")
         return {}
 
-sign_dic_path = os.path.join(os.path.dirname(__file__), "..", "sign_dic.csv")
+sign_dic_path = os.path.join(os.path.dirname(__file__), "sign_dic.csv")
 class_names_dict = load_class_names(sign_dic_path)
 
 num_classes = max(map(int, class_names_dict.keys())) + 1

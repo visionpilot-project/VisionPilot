@@ -1,23 +1,50 @@
 from beamng_sim.lidar.lidar import collect_lidar_data
 import numpy as np
+import open3d as o3d
 
 
 from .lane_boundry import detect_lane_boundaries
+from .lidar_lane_debug import LiveLidarDebugWindow
+
 bin_size = 1.0
 y_min, y_max = 0, 30
 
-def process_frame(lidar_sensor, camera_detections, beamng, speed):
-    lidar_data = lidar_sensor.poll()
-    point_cloud = collect_lidar_data(beamng, lidar_data)
+def process_frame(lidar_sensor, camera_detections, beamng, speed, debug_window=None):
+    try:
+        lidar_data = lidar_sensor.poll()
+        point_cloud = collect_lidar_data(beamng, lidar_data)
 
-    filtered_points = []
-    for point in point_cloud:
-        x, y, z = point[:3]
-        distance = (x**2 + y**2 + z**2) ** 0.5
-        if speed <= 70 and distance > 60:
-            continue
-        else:
-            filtered_points.append((x, y, z))
-            
-    boundaries = detect_lane_boundaries(filtered_points)
-    return boundaries
+        if not point_cloud or len(point_cloud) == 0:
+            print("Warning: Empty LiDAR point cloud")
+            return []
+
+        filtered_points = []
+        for point in point_cloud:
+            x, y, z = point[:3]
+            distance = (x**2 + y**2 + z**2) ** 0.5
+            if speed <= 70 and distance > 60:
+                continue
+            else:
+                filtered_points.append((x, y, z))
+                
+        if len(filtered_points) == 0:
+            print("Warning: No valid LiDAR points after filtering")
+            return []
+                
+        boundaries = detect_lane_boundaries(filtered_points)
+
+        if debug_window is not None:
+            debug_window.update(filtered_points, boundaries)
+
+        if boundaries:
+            for b in boundaries:
+                print(
+                    f"Y bin: {b['y_bin']}, "
+                    f"Left: {b['left']}, "
+                    f"Right: {b['right']}, "
+                    f"Mean road height: {b['mean_road_height']:.2f}"
+                )
+        return boundaries
+    except Exception as e:
+        print(f"LiDAR processing error: {e}")
+        return []

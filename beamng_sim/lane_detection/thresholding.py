@@ -49,37 +49,34 @@ def gradient_thresholds(image, ksize=3, avg_brightness=None):
 
 
 def color_threshold(image, avg_brightness=None):
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
 
-    # Default HSV thresholds
-    w_h_min, w_h_max = 51, 82
-    w_s_min, w_s_max = 0, 27
-    w_v_min, w_v_max = 51, 204
+    # White lane lines
+    w_h_min, w_h_max = 0, 180
+    w_s_min, w_s_max = 0, 25
+    w_v_min, w_v_max = 150, 255
 
-    y_h_min, y_h_max = 81, 180
-    y_s_min, y_s_max = 150, 201
-    y_v_min, y_v_max = 180, 255
+    # Yellow lane lines
+    y_h_min, y_h_max = 15, 35
+    y_s_min, y_s_max = 80, 255
+    y_v_min, y_v_max = 100, 255
 
-    s_h_min, s_h_max = 129, 180
-    s_s_min, s_s_max = 37, 103
-    s_v_min, s_v_max = 102, 201
+    # Shadow/gray lanes
+    s_h_min, s_h_max = 0, 180
+    s_s_min, s_s_max = 0, 35
+    s_v_min, s_v_max = 85, 155
 
-    # Adaptive logic based on avg_brightness
     if avg_brightness is not None:
-        if avg_brightness > 190:
-            adjust = int((avg_brightness - 190) * 0.8)
-            w_v_min = min(w_v_min + adjust, w_v_max - 1)
-            y_v_min = min(y_v_min + adjust, y_v_max - 1)
-        elif avg_brightness < 50:
-            adjust = int((50 - avg_brightness) * 2.5)
-            w_v_min = max(w_v_min - adjust, 15)
-            y_v_min = max(y_v_min - adjust, 15)
-            s_s_min = max(s_s_min - int(adjust/2.5), 0)
-        elif avg_brightness < 110:
-            adjust = int((110 - avg_brightness) * 2.0)
-            w_v_min = max(w_v_min - adjust, 5)
-            y_v_min = max(y_v_min - adjust, 5)
-            s_s_min = max(s_s_min - int(adjust/2), 0)
+        print(f"Avg brightness: {avg_brightness:.1f}")
+        print(f"White HSV: H({w_h_min}-{w_h_max}) S({w_s_min}-{w_s_max}) V({w_v_min}-{w_v_max})")
+
+    if avg_brightness is not None:
+        if avg_brightness > 180:  # Very bright conditions
+            w_s_max = max(w_s_max - 5, 15)
+            
+        elif avg_brightness < 70:  # Dark conditions
+            w_v_min = max(w_v_min - 30, 80)
+            s_v_max = min(s_v_max + 20, 180)
 
     white_lower = np.array([w_h_min, w_s_min, w_v_min])
     white_upper = np.array([w_h_max, w_s_max, w_v_max])
@@ -89,9 +86,11 @@ def color_threshold(image, avg_brightness=None):
     yellow_upper = np.array([y_h_max, y_s_max, y_v_max])
     yellow_mask = cv2.inRange(hsv, yellow_lower, yellow_upper)
 
-    shadow_lower = np.array([s_h_min, s_s_min, s_v_min])
-    shadow_upper = np.array([s_h_max, s_s_max, s_v_max])
-    shadow_mask = cv2.inRange(hsv, shadow_lower, shadow_upper)
+    shadow_mask = np.zeros_like(white_mask)
+    if avg_brightness is not None and 50 < avg_brightness < 140:
+        shadow_lower = np.array([s_h_min, s_s_min, s_v_min])
+        shadow_upper = np.array([s_h_max, s_s_max, s_v_max])
+        shadow_mask = cv2.inRange(hsv, shadow_lower, shadow_upper)
 
     combined_mask = cv2.bitwise_or(white_mask, yellow_mask)
     combined_mask = cv2.bitwise_or(combined_mask, shadow_mask)
@@ -103,8 +102,17 @@ def color_threshold(image, avg_brightness=None):
 
 def combine_thresholds(color_binary, gradient_binary):
     combined_binary = np.zeros_like(color_binary)
-    combined_binary[color_binary == 1] = 1
-    combined_binary[(color_binary == 1) & (gradient_binary == 1)] = 1
+    
+    color_coverage = np.sum(color_binary)
+    
+    if color_coverage > 100:
+        combined_binary[color_binary == 1] = 1
+        no_color_mask = (color_binary == 0)
+        combined_binary[no_color_mask & (gradient_binary == 1)] = 1
+    else:
+        combined_binary[gradient_binary == 1] = 1
+        combined_binary[color_binary == 1] = 1
+    
     return combined_binary
 
 

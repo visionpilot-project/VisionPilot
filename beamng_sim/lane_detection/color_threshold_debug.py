@@ -88,9 +88,9 @@ try:
     beamng.open()
     print("Connection opened successfully")
 
-    #scenario = Scenario('west_coast_usa', 'lane_detection_city')
+    scenario = Scenario('west_coast_usa', 'lane_detection_city')
     print("Creating scenario...")
-    scenario = Scenario('west_coast_usa', 'lane_detection_highway')
+    #scenario = Scenario('west_coast_usa', 'lane_detection_highway')
     vehicle = Vehicle('ego_vehicle', model='etk800', licence='JULIAN')
     #vehicle = Vehicle('Q8', model='adroniskq8', licence='JULIAN')
 

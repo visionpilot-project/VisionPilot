@@ -4,6 +4,10 @@ import cv2
 def process_frame(frame, draw_detections=True):
     try:
         detections = detect_vehicles_pedestrians(frame)
+        
+        if not detections:
+            detections = []
+        
         result_img = frame
         
         if draw_detections:
@@ -16,5 +20,5 @@ def process_frame(frame, draw_detections=True):
 
         return detections, result_img
     except Exception as e:
-        print(f"Error processing frame: {e}")
-        return []
+        print(f"Error processing vehicle/pedestrian frame: {e}")
+        return [], frame

@@ -1,8 +1,13 @@
-from beamng_sim.sign import combined_sign_detection_classification
+from beamng_sim.sign.detect_classify import combined_sign_detection_classification
 
 def process_frame(frame, debugger=None, draw_detections=True):
     try:
         detections = combined_sign_detection_classification(frame)
+        
+        # Handle case where no detections are found
+        if not detections:
+            detections = []
+            
         result_img = frame
         
         if draw_detections:
@@ -16,5 +21,6 @@ def process_frame(frame, debugger=None, draw_detections=True):
         
         return detections, result_img
     except Exception as e:
-        print(f"Error processing frame: {e}")
-        return []
+        print(f"Error processing sign frame: {e}")
+        # Return empty detections and original frame to maintain tuple structure
+        return [], frame

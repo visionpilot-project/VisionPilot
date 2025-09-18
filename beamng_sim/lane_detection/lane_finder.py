@@ -95,7 +95,7 @@ def sliding_window_search(binary_warped, histogram, debugger=None):
         if len(sliding_window_search.left_lane_pos_history) > 30:
             sliding_window_search.left_lane_pos_history.pop(0)
         avg_left_pos = np.mean(sliding_window_search.left_lane_pos_history)
-        if abs(current_left_pos - avg_left_pos) > 60:  # threshold in pixels
+        if abs(current_left_pos - avg_left_pos) > 120:
             print(f"Left lane jump too far from history: {current_left_pos} vs avg {avg_left_pos:.1f}, ignoring")
             leftx = np.array([])
             lefty = np.array([])
@@ -106,7 +106,7 @@ def sliding_window_search(binary_warped, histogram, debugger=None):
         if len(sliding_window_search.right_lane_pos_history) > 30:
             sliding_window_search.right_lane_pos_history.pop(0)
         avg_right_pos = np.mean(sliding_window_search.right_lane_pos_history)
-        if abs(current_right_pos - avg_right_pos) > 60:  # threshold in pixels
+        if abs(current_right_pos - avg_right_pos) > 120:
             print(f"Right lane jump too far from history: {current_right_pos} vs avg {avg_right_pos:.1f}, ignoring")
             rightx = np.array([])
             righty = np.array([])
