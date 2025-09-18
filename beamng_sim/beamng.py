@@ -72,12 +72,12 @@ def sim_setup():
         vehicle,
         requested_update_time=0.01,
         is_using_shared_memory=True,
-        is_360_mode=True,  # 360-degree mode
+        is_360_mode=False,  # Might set to true for mapping later
         vertical_angle=30,  # Vertical field of view
-        vertical_resolution=256,  # Number of lasers/channels
+        vertical_resolution=64,  # Number of lasers/channels
         density=10,
-        frequency=30,
-        max_distance=60,
+        frequency=20,
+        max_distance=100,
         pos=(0, 0.2, 1.8),
     )
 
@@ -172,7 +172,7 @@ def main():
             cv2.imshow('Vehicle and Pedestrian Detection', vehicle_img)
 
             # Lidar
-            lidar_detections, lidar_img = lidar_process_frame(lidar, camera_detections=vehicle_detections, beamng=beamng)
+            lidar_detections, lidar_img = lidar_process_frame(lidar, camera_detections=vehicle_detections, beamng=beamng, speed=speed_kph)
             cv2.imshow('LiDAR Detection', lidar_img)
 
             # Steering, throttle, brake inputs
