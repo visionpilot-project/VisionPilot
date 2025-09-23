@@ -57,6 +57,7 @@ def sim_setup():
 
     scenario = Scenario('west_coast_usa', 'lane_detection_city')
     #scenario = Scenario('west_coast_usa', 'lane_detection_highway')
+
     vehicle = Vehicle('ego_vehicle', model='etk800', licence='JULIAN')
     #vehicle = Vehicle('Q8', model='rsq8_600_tfsi', licence='JULIAN')
 
@@ -92,7 +93,6 @@ def sim_setup():
         is_render_colours=True,
     )
 
-        # Create LiDAR sensor after scenario has started
     lidar = Lidar(
         "lidar1",
         beamng,
@@ -127,7 +127,7 @@ def sim_setup():
 
 def get_vehicle_speed(vehicle):
 
-    vehicle.poll_sensors()  # Update the state
+    vehicle.poll_sensors()
     if 'vel' in vehicle.state:
         speed_mps = vehicle.state['vel'][0]
         speed_kph = speed_mps * 3.6
@@ -151,7 +151,7 @@ def lane_detection(img, speed_kph, pid, previous_steering, base_throttle, steeri
         print(f"Large deviation detected: {deviation:.2f}m - attempting correction")
         deviation = np.clip(deviation, -2.5, 2.5)
 
-    steering = pid.update(-deviation, 0.01)  # dt can be passed in
+    steering = pid.update(-deviation, 0.01)
     steering += steering_bias
     steering = np.clip(steering, -1.0, 1.0)
     steering_change = steering - previous_steering
@@ -185,7 +185,7 @@ def main():
 
     pid = PIDController(Kp=0.15, Ki=0.005, Kd=0.04)
 
-    base_throttle = 0.08
+    base_throttle = 0.05
     steering_bias = 0
     max_steering_change = 0.08
     previous_steering = 0.0
@@ -194,7 +194,8 @@ def main():
 
     last_time = time.time()
     try:
-        for step_i in range(1000):
+        step_i = 0
+        while True:
             current_time = time.time()
             dt = current_time - last_time
             last_time = current_time
@@ -222,7 +223,7 @@ def main():
             radar_detections = radar_process_frame(radar_sensor=radar, camera_detections=vehicle_detections, speed=speed_kph, debug_window=None)
 
             # Lidar Road Boundaries
-            lidar_boundaries = lidar_process_frame(lidar, camera_detections=vehicle_detections, beamng=beamng, speed=speed_kph, debug_window=debug_window)
+            lidar_boundaries = lidar_process_frame(lidar, camera_detections=vehicle_detections, beamng=beamng, speed=speed_kph, debug_window=None)
 
             # Lidar Object Detection
             # lidar_detections, lidar_obj_img = lidar_object_detections(lidar, camera_detections=vehicle_detections)
@@ -238,6 +239,7 @@ def main():
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
             frame_count += 1
+            step_i += 1
 
     except KeyboardInterrupt:
         print("Interrupted by user")
