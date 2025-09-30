@@ -129,10 +129,10 @@ All models are located in the models folder
 - **Traffic Sign Detector:** YOLOv8 detector (traffic_sign/)
 - **Traffic Light Detect/Class:** YOLOv8 detector, classifier (traffic-lights/)
 - **Vehicle/Pedestrian:** YOLOv8, SCNN (vehicle-pedestrian-detection/)
-- 
 
 ## 📂 Folder Structure
 
+> **Currently Outdated**
 <details>
   <summary>Click to expand folder structure</summary>
 
@@ -197,48 +197,43 @@ self-driving-car-simulation/
 
 
 **Roadmap**
-- [x] Sign classification (CNN) *(completed)*
-- [x] Traffic light classification *(completed)*
-- [x] Lane detection (U-Net, SCNN, Hough) *(completed)*
+- [x] Sign classification (CNN)
+- [x] Traffic light classification
+- [x] Lane detection (U-Net, SCNN, Hough)
 - [x] ⭐ Advanced lane detection using OpenCV (robust city/highway, lighting, outlier handling) *(completed, still tuning)*
-- [x] Integrate and test in BeamNG.tech simulation (replacing CARLA) *(completed)*
+- [x] Integrate and test in BeamNG.tech simulation (replacing CARLA)
 - [x] ⭐ Tweak lane detection parameters *(completed, still tuning)*
 - [ ] ⭐ Integrate Radar
-- [ ] Integrate Lidar
-- [x] Modularize and clean up BeamNG.tech pipeline *(completed)*
+- [x] Integrate Lidar
+- [ ] Lidar Object Detection (Maybe even train a model)
+- [x] Lidar lane boundry detection
+- [x] Modularize and clean up BeamNG.tech pipeline
 - [ ] ⭐ Integrate vehicle control (autonomous driving logic)
 - [ ] Traffic scenarios: driving in heavy, moderate, and light traffic
+- [ ] Test different weather and lighting conditions
 - [ ] Add evaluation scripts for all modules
-- [ ] Documentation improvements (usage, troubleshooting)
 - [x] ⭐ Begin integration of other models (sign, light, pedestrian, etc.)
 - [ ] Adaptive Cruise Control utalizitng radar sensor
 
 **Future / Stretch Goals**
-- [x] ⭐ Real-time sensor fusion (camera, radar, LiDAR)
-- [ ] Multi-camera support (360° perception)
-- [ ] End-to-end driving policy learning (RL, imitation learning)
-- [ ] Advanced traffic participant prediction (trajectory, intent)
-- [ ] Integration with ROS (Robot Operating System)
-- [ ] Interactive web dashboard for results/visualizations
+- [ ] Test using actual RC car, or built robot
+- [ ] 💤 End-to-end driving policy learning (RL, imitation learning)
+- [ ] 💤 Advanced traffic participant prediction (trajectory, intent)
+- [ ] 💤 Interactive web dashboard for results/visualizations
+
+
 
 > ⭐ = Complete but still being improved/tuned (not final version)
 
-
-## 🤝 Contributing
-- Pull requests welcome!
-- Please open issues for bugs, feature requests, or questions.
-
-
+> 💤 = Minimal Priority, can be addressed later
 
 ## 🙏 Credits
 - Datasets: CU Lane, LISA, GTRSB, Mapillary, BDD100K
 - Models: Ultralytics YOLOv8, custom CNNs
 - Simulation: BeamNG.tech ([BeamNG GmbH](https://www.beamng.tech/))
-- Special thanks to [Kaggle](https://www.kaggle.com/) for providing free GPU resources for model training without them it would've been imposible to have such good models.
+- Special thanks to [Kaggle](https://www.kaggle.com/) for providing free GPU resources for model training without them it would've been imposible to train such good models.
 
 ### BeamNG.tech Citation
-
-Use of BeamNG.tech in non-commercial, academic studies should be properly cited in any articles, conference papers, presentations made about research projects, etc. Please adhere to the citation format required by your institution or publication, using the information below:
 
 > **Title:** BeamNG.tech  
 > **Author:** BeamNG GmbH  
