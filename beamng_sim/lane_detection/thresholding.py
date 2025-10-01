@@ -67,11 +67,11 @@ def color_threshold(image, avg_brightness=None):
     hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
 
     w_h_min, w_h_max = 0, 180
-    w_s_min, w_s_max = 0, 25
-    w_v_min, w_v_max = 200, 255
+    w_s_min, w_s_max = 0, 50
+    w_v_min, w_v_max = 160, 255
 
     y_h_min, y_h_max = 10, 45
-    y_s_min, y_s_max = 50, 255
+    y_s_min, y_s_max = 60, 255
     y_v_min, y_v_max = 100, 255
 
     s_h_min, s_h_max = 0, 180
@@ -96,8 +96,8 @@ def color_threshold(image, avg_brightness=None):
         is_stable_lighting = variance < 100
         
         if avg_recent > 200:  # Very bright conditions (direct sunlight)
-            w_s_max = min(w_s_max, 15)
-            w_v_min = 220
+            w_s_max = 25
+            w_v_min = 200
             y_s_min = 100
             
         elif avg_recent > 170:
@@ -105,19 +105,19 @@ def color_threshold(image, avg_brightness=None):
             w_s_max = 20
             
         elif 100 < avg_recent < 170:
-            w_v_min = 190
-            w_s_max = 22
+            w_v_min = 170
+            w_s_max = 40
 
         elif 70 < avg_recent <= 100:
-            w_v_min = 170
-            w_s_max = 25
+            w_v_min = 150
+            w_s_max = 42
             s_v_max = 160
 
-        elif avg_recent <= 70:
-            w_v_min = 140
-            w_s_max = 30
+        elif avg_brightness <= 70:  # Low light conditions
+            w_v_min = 120
+            w_s_max = 45
             y_v_min = 90
-            y_s_min = 40
+            y_s_min = 50
             s_v_max = 150
 
     # Apply white mask
@@ -206,7 +206,8 @@ def combine_thresholds(color_binary, gradient_binary, avg_brightness=None):
         small_kernel = np.ones((2,2), np.uint8)
         combined_binary = cv2.morphologyEx(combined_binary, cv2.MORPH_CLOSE, small_kernel)
         
-        combined_binary = combined_binary.astype(bool)
+        # Keep as uint8 instead of converting to bool to avoid OpenCV issues
+        combined_binary = (combined_binary > 0).astype(np.uint8)
     
     final_pixels = np.sum(combined_binary)
     print(f"Final combined binary pixels: {final_pixels}")
@@ -232,23 +233,26 @@ def apply_thresholds(image, src_points=None, debugger=None, debug_display=False)
     combined_binary = combine_thresholds(color_binary, grad_binary, avg_brightness=avg_brightness)
     
     if debug_display:
-        debug_display = np.dstack((np.zeros_like(combined_binary), 
-                                  np.zeros_like(combined_binary),
-                                  np.zeros_like(combined_binary)))
+        # Make sure all binary images are uint8 for OpenCV compatibility
+        color_binary_uint8 = color_binary.astype(np.uint8)
+        grad_binary_uint8 = grad_binary.astype(np.uint8)
         
-        debug_display[color_binary == 1] = [0, 0, 255]
+        debug_display = np.zeros((combined_binary.shape[0], combined_binary.shape[1], 3), dtype=np.uint8)
         
-        debug_display[(color_binary == 0) & (grad_binary == 1)] = [0, 255, 0]
+        debug_display[color_binary_uint8 == 1] = [0, 0, 255]
         
-        debug_display[(color_binary == 1) & (grad_binary == 1)] = [0, 255, 255]
+        debug_display[(color_binary_uint8 == 0) & (grad_binary_uint8 == 1)] = [0, 255, 0]
+        
+        debug_display[(color_binary_uint8 == 1) & (grad_binary_uint8 == 1)] = [0, 255, 255]
         
         final_vis = np.zeros_like(debug_display)
+        # Combined binary should already be uint8 from previous fix
         final_vis[combined_binary == 1] = [255, 255, 255]
         
-        grad_display = np.dstack((grad_binary, grad_binary, grad_binary)) * 255
+        grad_display = np.dstack((grad_binary_uint8, grad_binary_uint8, grad_binary_uint8)) * 255
         cv2.imshow('1a. Gradient Threshold', grad_display)
         
-        color_display = np.dstack((color_binary, color_binary, color_binary)) * 255
+        color_display = np.dstack((color_binary_uint8, color_binary_uint8, color_binary_uint8)) * 255
         cv2.imshow('1b. Color Threshold', color_display)
         
         combined_display_array = combined_binary.astype(np.uint8)

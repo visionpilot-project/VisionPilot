@@ -57,41 +57,43 @@ def process_frame(frame, src_points):
     color_bin = color_threshold(frame, avg_brightness=avg_brightness)
     combined_binary = combine_thresholds(color_bin, grad_binary, avg_brightness=avg_brightness)
     
+    # White lane lines - Adjusted to better detect actual lane markings
     w_h_min, w_h_max = 0, 180
-    w_s_min, w_s_max = 0, 25  # Reduced to avoid off-white road surfaces
-    w_v_min, w_v_max = 200, 255  # Higher minimum to focus on brighter white markings
+    w_s_min, w_s_max = 0, 50  # Increased to catch more off-white lane markings
+    w_v_min, w_v_max = 160, 255  # Lowered minimum to catch more white markings
     
+    # Yellow lane lines
     y_h_min, y_h_max = 10, 45  # Wider hue range for yellow
-    y_s_min, y_s_max = 50, 255  # Lower saturation threshold to catch faded yellow
-    y_v_min, y_v_max = 100, 255
+    y_s_min, y_s_max = 60, 255  # Slightly increased min saturation to reduce noise
+    y_v_min, y_v_max = 110, 255  # Slightly increased min value to reduce noise
     
     s_h_min, s_h_max = 0, 180
     s_s_min, s_s_max = 0, 20
     s_v_min, s_v_max = 110, 150
     
     if avg_brightness > 200:  # Very bright conditions (direct sunlight)
-        w_s_max = min(w_s_max, 15)  # More restrictive on saturation
-        w_v_min = 220  # Higher minimum value to only catch bright white lines
-        y_s_min = 100  # Keep yellow detection robust
-        
+        w_s_max = 25
+        w_v_min = 200
+        y_s_min = 100
+
     elif avg_brightness > 170:
-        w_v_min = 200  # Higher to focus on true white markings
-        w_s_max = 20  # More restrictive
+        w_v_min = 180
+        w_s_max = 35
         
     elif 100 < avg_brightness < 170:
-        w_v_min = 190  # Higher to avoid road noise
-        w_s_max = 22  # More restrictive
-
+        w_v_min = 170
+        w_s_max = 40
+        
     elif 70 < avg_brightness <= 100:
-        w_v_min = 170  # Higher for better noise reduction
-        w_s_max = 25  # Still restrictive
+        w_v_min = 150
+        w_s_max = 42
         s_v_max = 160
-
+        
     elif avg_brightness <= 70:  # Low light conditions
-        w_v_min = 140  # Lower but still filtering noise
-        w_s_max = 30  # Allow for some off-white in dark conditions
-        y_v_min = 90   # More permissive for yellow in low light
-        y_s_min = 40   # More permissive for yellow in low light
+        w_v_min = 120
+        w_s_max = 45
+        y_v_min = 90
+        y_s_min = 50
         s_v_max = 150
     
     white_lower = np.array([w_h_min, w_s_min, w_v_min])
@@ -104,10 +106,6 @@ def process_frame(frame, src_points):
     yellow_lower = np.array([y_h_min, y_s_min, y_v_min])
     yellow_upper = np.array([y_h_max, y_s_max, y_v_max])
     yellow_mask = cv2.inRange(hsv, yellow_lower, yellow_upper)
-    
-    yellow_kernel = np.ones((5,3), np.uint8)
-    yellow_mask = cv2.dilate(yellow_mask, yellow_kernel, iterations=1)
-    yellow_mask = cv2.morphologyEx(yellow_mask, cv2.MORPH_CLOSE, kernel)
     
     shadow_mask = np.zeros_like(white_mask)
     if 60 < avg_brightness < 120:
@@ -128,12 +126,18 @@ def process_frame(frame, src_points):
     combined_display = np.dstack((combined_display_array, combined_display_array, combined_display_array)) * 255
     
     method_vis = np.zeros_like(frame)
-    method_vis[color_bin == 1] = [255, 0, 0]  # Red for color detection
-    method_vis[(color_bin == 0) & (grad_binary == 1)] = [0, 255, 0]  # Green for gradient detection
-    method_vis[(color_bin == 1) & (grad_binary == 1)] = [0, 255, 255]  # Cyan for both methods
+    # Convert binary arrays to uint8 for proper indexing with OpenCV
+    color_bin_uint8 = color_bin.astype(np.uint8)
+    grad_binary_uint8 = grad_binary.astype(np.uint8)
+    
+    method_vis[color_bin_uint8 == 1] = [255, 0, 0]  # Red for color detection
+    method_vis[(color_bin_uint8 == 0) & (grad_binary_uint8 == 1)] = [0, 255, 0]  # Green for gradient detection
+    method_vis[(color_bin_uint8 == 1) & (grad_binary_uint8 == 1)] = [0, 255, 255]  # Cyan for both methods
     
     final_vis = np.zeros_like(frame)
-    final_vis[combined_binary.astype(bool) == 1] = [255, 255, 255]  # White for final output
+    # Convert to uint8 for proper indexing with OpenCV
+    combined_uint8 = combined_binary.astype(np.uint8)
+    final_vis[combined_uint8 == 1] = [255, 255, 255]  # White for final output
     
     return {
         'frame': frame,

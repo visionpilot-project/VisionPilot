@@ -11,7 +11,7 @@ from ultralytics import YOLO
 import tensorflow as tf
 
 from beamng_sim.sign.detect_classify import random_brightness
-from config.config import SIGN_DETECTION_MODEL, SIGN_CLASSIFICATION_MODEL
+from config.config import SIGN_DETECTION_MODEL, SIGN_CLASSIFICATION_MODEL, VEHICLE_PEDESTRIAN_MODEL
 
 
 import numpy as np
@@ -28,7 +28,6 @@ from beamng_sim.radar.main import process_frame as radar_process_frame
 
 from beamng_sim.lidar.lidar_lane_debug import LiveLidarDebugWindow
 
-
 MODELS = {}
 
 def yaw_to_quat(yaw_deg):
@@ -39,7 +38,7 @@ def yaw_to_quat(yaw_deg):
 
 def load_models():    
     print("Loading models")
-    
+
     # Load sign detection model
     MODELS['sign_detect'] = YOLO(str(SIGN_DETECTION_MODEL))
     print("Sign detection model loaded")
@@ -50,6 +49,10 @@ def load_models():
         custom_objects={"random_brightness": random_brightness}
     )
     print("Sign classification model loaded")
+    
+    # Load vehicle detection model 
+    MODELS['vehicle'] = YOLO(str(VEHICLE_PEDESTRIAN_MODEL))
+    print("Vehicle detection model loaded")
     
     print("All models loaded!")
 
