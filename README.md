@@ -6,11 +6,11 @@
 
 A modular Python project for autonomous driving research and prototyping, now fully integrated with the BeamNG.tech simulator. This system combines traditional computer vision and state-of-the-art deep learning (CNN, U-Net, YOLO, SCNN) to tackle:
 
-- 🛣️ Lane detection (Hough Transform, SCNN, city/highway scenarios)
-- 🛑 Traffic sign classification & detection (CNN, YOLOv8, GTRSB, LISA, Mapillary)
-- 🚦 Traffic light detection & classification (YOLOv8, DLDT, LISA)
-- 🚗 Vehicle & pedestrian detection and recognition (YOLOv8, SCNN, BDD100K)
-- 🧠 Multi-model inference, real-time simulation, and visualization (BeamNG.tech)
+- 🛣️ Lane detection (Traditional CV, SCNN, capable of city & highway scenarios)
+- 🛑 Traffic sign classification & detection (CNN, YOLOv8)
+- 🚦 Traffic light detection & classification (YOLOv8, CV, CNN)
+- 🚗 Vehicle & pedestrian detection and recognition (YOLOv8)
+- 🧠 Multi-model inference, real-time simulation, autonomous driving, and visualization (BeamNG.tech)
 
 Features robust training pipelines, multi-model inference, and a flexible folder structure for easy experimentation and extension. The project is designed for research and prototyping in realistic driving environments using BeamNG.tech.
 
@@ -38,10 +38,12 @@ Below are sample demos of the system's capabilities. More demos (including new m
 
 ## 🔧 Features
 
-- Lane detection with SCNN and OpenCV (comparison)
-- Traffic sign classification using CNN
-- Traffic light detection (YOLO) + classification
+- Lane detection with SCNN
+- Lane Detection using Traditional CV
+- Traffic Sign Classification + Detection
+- Traffic Light Classification + Detection
 - Video-based inference pipeline
+- Sensor Fusion using Lidar + Radar
 - Multi-window simulation using BeamNG.tech
 - Real-time perception and control in BeamNG.tech
 
@@ -124,11 +126,11 @@ For qualitative and quantitative results, see the demo section above and the `re
 
 ## 🧠 Model Details
 All models are located in the models folder
-- **Lane Detection:** Hough Transform, SCNN (lane-detection-cnn/)
+- **Lane Detection:** SCNN
 - **Traffic Sign Classification:** CNN classifier
-- **Traffic Sign Detector:** YOLOv8 detector (traffic_sign/)
-- **Traffic Light Detect/Class:** YOLOv8 detector, classifier (traffic-lights/)
-- **Vehicle/Pedestrian:** YOLOv8, SCNN (vehicle-pedestrian-detection/)
+- **Traffic Sign Detector:** YOLOv8 detector
+- **Traffic Light Detect/Class:** YOLOv8 detector, CNN classifier
+- **Vehicle/Pedestrian:** YOLOv8
 
 ## 📂 Folder Structure
 
@@ -168,7 +170,7 @@ self-driving-car-simulation/
 │   └── vehicle_obstacle/         # Vehicle and obstacle detection
 │       ├── main.py
 │       └── vehicle_obstacle_detection.py
-├── lane-detection/               # Lane detection (Hough, city/highway)
+├── lane-detection/               # Lane detection (CV, city/highway)
 │   ├── city/
 │   └── highway/
 ├── lane-detection-cnn/           # CNN/SCNN lane detection, model tests
@@ -177,7 +179,7 @@ self-driving-car-simulation/
 ├── vehicle-pedestrian-detection/ # Vehicle & pedestrian detection
 ├── models/                       # Pretrained models (YOLO, SCNN, CNN, etc)
 
-├── datasets/                     # All datasets (see below)
+├── datasets/                     # All datasets (see above)
 │   ├── lane-detection/
 │   ├── traffic-light/
 │   ├── traffic-sign/
@@ -194,16 +196,13 @@ self-driving-car-simulation/
 
 ## 🚀 Roadmap
 
-
-
-**Roadmap**
 - [x] Sign classification (CNN)
 - [x] Traffic light classification
-- [x] Lane detection (U-Net, SCNN, Hough)
+- [x] Lane detection (CNN, CV)
 - [x] ⭐ Advanced lane detection using OpenCV (robust city/highway, lighting, outlier handling) *(completed, still tuning)*
 - [x] Integrate and test in BeamNG.tech simulation (replacing CARLA)
-- [x] ⭐ Tweak lane detection parameters *(completed, still tuning)*
-- [ ] ⭐ Integrate Radar
+- [x] ⭐ Tweak lane detection parameters and thresholds *(completed, still tuning)*
+- [x] ⭐ Integrate Radar
 - [x] Integrate Lidar
 - [ ] Lidar Object Detection (Maybe even train a model)
 - [x] Lidar lane boundry detection
@@ -211,12 +210,12 @@ self-driving-car-simulation/
 - [ ] ⭐ Integrate vehicle control (autonomous driving logic)
 - [ ] Traffic scenarios: driving in heavy, moderate, and light traffic
 - [ ] Test different weather and lighting conditions
-- [ ] Add evaluation scripts for all modules
 - [x] ⭐ Begin integration of other models (sign, light, pedestrian, etc.)
-- [ ] Adaptive Cruise Control utalizitng radar sensor
+- [ ] Adaptive Cruise Control
+- [ ] Emergency Breaking
 
 **Future / Stretch Goals**
-- [ ] Test using actual RC car, or built robot
+- [ ] Test using actual RC car
 - [ ] 💤 End-to-end driving policy learning (RL, imitation learning)
 - [ ] 💤 Advanced traffic participant prediction (trajectory, intent)
 - [ ] 💤 Interactive web dashboard for results/visualizations
