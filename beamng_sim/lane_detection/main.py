@@ -20,8 +20,6 @@ def process_frame(frame, speed=0, debugger=None, debug_display=False):
         if debug_display:
             cv2.imshow('1. Binary Image', binary_image*255 if binary_image.max()<=1 else binary_image)
             cv2.waitKey(1)
-
-        # AVG Brightness DEBUG WINDOW
         
         # Step 2: Apply perspective transform
         binary_warped, Minv = perspective_warp(binary_image, speed=speed, debugger=debugger)

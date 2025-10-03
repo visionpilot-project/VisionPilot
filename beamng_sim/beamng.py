@@ -233,7 +233,7 @@ def main():
 
     debug_window = LiveLidarDebugWindow()
 
-    pid = PIDController(Kp=0.15, Ki=0.005, Kd=0.04)
+    pid = PIDController(Kp=0.15, Ki=0.002, Kd=0.12)
 
     base_throttle = 0.05
     steering_bias = 0
