@@ -61,8 +61,8 @@ def sim_setup():
     beamng = BeamNGpy('localhost', 64256, home=r'C:\Users\user\Documents\beamng-tech\BeamNG.tech.v0.36.4.0')
     beamng.open()
 
-    scenario = Scenario('west_coast_usa', 'lane_detection_city')
-    #scenario = Scenario('west_coast_usa', 'lane_detection_highway')
+    #scenario = Scenario('west_coast_usa', 'lane_detection_city')
+    scenario = Scenario('west_coast_usa', 'lane_detection_highway')
 
     vehicle = Vehicle('ego_vehicle', model='etk800', licence='JULIAN')
     #vehicle = Vehicle('Q8', model='rsq8_600_tfsi', licence='JULIAN')
@@ -72,10 +72,10 @@ def sim_setup():
     rot_highway = yaw_to_quat(-135.678)
 
     # Street Spawn
-    scenario.add_vehicle(vehicle, pos=(-730.212, 94.630, 118.517), rot_quat=rot_city)
+    #scenario.add_vehicle(vehicle, pos=(-730.212, 94.630, 118.517), rot_quat=rot_city)
     
     # Highway Spawn
-    #scenario.add_vehicle(vehicle, pos=(-287.210, 73.609, 112.363), rot_quat=rot_highway)
+    scenario.add_vehicle(vehicle, pos=(-287.210, 73.609, 112.363), rot_quat=rot_highway)
 
     scenario.make(beamng)
 
@@ -233,7 +233,7 @@ def main():
 
     debug_window = LiveLidarDebugWindow()
 
-    pid = PIDController(Kp=0.15, Ki=0.002, Kd=0.12)
+    pid = PIDController(Kp=0.15, Ki=0.002, Kd=0.2)
 
     base_throttle = 0.05
     steering_bias = 0
@@ -273,13 +273,14 @@ def main():
             )
             cv2.imshow('Lane Detection', cv2.cvtColor(result, cv2.COLOR_RGB2BGR))
 
-            # Sign Detection
-            sign_detections, sign_img = sign_detection_classification(img)
-            cv2.imshow('Sign Detection', sign_img)
+            if step_i % 5 == 0:
+                # Sign Detection
+                sign_detections, sign_img = sign_detection_classification(img)
+                cv2.imshow('Sign Detection', sign_img)
 
-            # Vehicle & Obstacle Detection
-            vehicle_detections, vehicle_img = vehicle_obstacle_detection(img)
-            cv2.imshow('Vehicle and Pedestrian Detection', vehicle_img)
+                # Vehicle & Obstacle Detection
+                vehicle_detections, vehicle_img = vehicle_obstacle_detection(img)
+                cv2.imshow('Vehicle and Pedestrian Detection', vehicle_img)
 
             # radar_detections = radar_process_frame(radar_sensor=radar, camera_detections=vehicle_detections, speed=speed_kph)
 
@@ -293,7 +294,7 @@ def main():
             previous_steering = steering
             vehicle.control(steering=steering, throttle=throttle, brake=0.0)
 
-            if step_i % 20 == 0:
+            if step_i % 10 == 0:
                 print(f"[{step_i}] Deviation: {deviation:.3f}m | Steering: {steering:.3f} | Throttle: {throttle:.3f}")
                 print(f"Frame {step_i}: lane_center={lane_center}, vehicle_center={vehicle_center}")
             if cv2.waitKey(1) & 0xFF == ord('q'):

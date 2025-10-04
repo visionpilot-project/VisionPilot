@@ -91,9 +91,10 @@ def color_threshold(image, avg_brightness=None):
         variance = np.var(color_threshold.brightness_history) if len(color_threshold.brightness_history) > 1 else 0
         
         print(f"Avg brightness: {avg_brightness:.1f}, Recent avg: {avg_recent:.1f}, Variance: {variance:.1f}")
-        print(f"White HSV: H({w_h_min}-{w_h_max}) S({w_s_min}-{w_s_max}) V({w_v_min}-{w_v_max})")
         
-        is_stable_lighting = variance < 100
+        #is_stable_lighting = variance < 50
+
+        # Implement adaptive thresholding based on lighting stability
         
         if avg_recent > 200:  # Very bright conditions (direct sunlight)
             w_s_max = 25
@@ -105,7 +106,7 @@ def color_threshold(image, avg_brightness=None):
             w_s_max = 20
             
         elif 100 < avg_recent < 170:
-            w_v_min = 170
+            w_v_min = 200
             w_s_max = 40
 
         elif 70 < avg_recent <= 100:
@@ -130,10 +131,6 @@ def color_threshold(image, avg_brightness=None):
     yellow_upper = np.array([y_h_max, y_s_max, y_v_max])
     yellow_mask = cv2.inRange(hsv, yellow_lower, yellow_upper)
     
-    white_pixels = np.sum(white_mask)
-    yellow_pixels = np.sum(yellow_mask)
-    print(f"White mask pixels: {white_pixels}, Yellow mask pixels: {yellow_pixels}")
-    
     shadow_mask = np.zeros_like(white_mask)
     if avg_brightness is not None and 50 < avg_brightness < 150:
         shadow_lower = np.array([s_h_min, s_s_min, s_v_min])
@@ -143,9 +140,6 @@ def color_threshold(image, avg_brightness=None):
     combined_mask = cv2.bitwise_or(white_mask, yellow_mask)
     
     if avg_brightness is not None and 60 < avg_brightness < 120:
-        kernel = np.ones((3,3), np.uint8)
-        shadow_mask = cv2.morphologyEx(shadow_mask, cv2.MORPH_OPEN, kernel)
-        shadow_mask = cv2.morphologyEx(shadow_mask, cv2.MORPH_CLOSE, kernel)
         combined_mask = cv2.bitwise_or(combined_mask, shadow_mask)
     
     combined_pixels = np.sum(combined_mask)
@@ -191,23 +185,13 @@ def combine_thresholds(color_binary, gradient_binary, avg_brightness=None):
         if avg_brightness < 120:  # In darker conditions, rely more on gradients
             combined_binary[gradient_binary == 1] = 1
         elif avg_brightness < 180:  # Medium lighting
-            dilated_color = cv2.dilate(color_binary.astype(np.uint8), np.ones((5,5), np.uint8), iterations=1)
-            combined_binary[(gradient_binary == 1) & (dilated_color > 0)] = 1
+            combined_binary[(gradient_binary == 1) & (color_binary == 1)] = 1
         else:  # Very bright conditions
-            dilated_color = cv2.dilate(color_binary.astype(np.uint8), np.ones((3,3), np.uint8), iterations=1)
-            combined_binary[(gradient_binary == 1) & (dilated_color > 0)] = 1
+            combined_binary[(gradient_binary == 1) & (color_binary == 1)] = 1
     else:
-        dilated_color = cv2.dilate(color_binary.astype(np.uint8), np.ones((7,7), np.uint8), iterations=1)
-        combined_binary[(gradient_binary == 1) & (dilated_color > 0)] = 1
+        combined_binary[gradient_binary == 1] = 1
     
-    if np.sum(combined_binary) > 0:
-        combined_binary = combined_binary.astype(np.uint8)
-        
-        small_kernel = np.ones((2,2), np.uint8)
-        combined_binary = cv2.morphologyEx(combined_binary, cv2.MORPH_CLOSE, small_kernel)
-        
-        # Keep as uint8 instead of converting to bool to avoid OpenCV issues
-        combined_binary = (combined_binary > 0).astype(np.uint8)
+    combined_binary = (combined_binary > 0).astype(np.uint8)
     
     final_pixels = np.sum(combined_binary)
     print(f"Final combined binary pixels: {final_pixels}")

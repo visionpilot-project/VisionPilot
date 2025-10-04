@@ -182,7 +182,6 @@ def combined_sign_detection_classification(frame):
     classes_found = set()
     for detection in vehicle_model_detections:
         classes_found.add(detection['class'])
-    print(f"Vehicle model found classes: {classes_found}")
 
     vehicle_model_sign_detections = []
     for detection in vehicle_model_detections:
