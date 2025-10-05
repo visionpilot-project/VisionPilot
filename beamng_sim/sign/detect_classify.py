@@ -196,14 +196,18 @@ def combined_sign_detection_classification(frame):
 
     final_detections = []
 
+    SIGN_MODEL_THRESHOLD = 0.4  # Internal threshold for sign model detections
+    VEHICLE_MODEL_THRESHOLD = 0.4  # Internal threshold for vehicle model detections
+    CLASS_CONFIDENCE_THRESHOLD = 0.4  # Internal threshold for classification confidence
+
     for sign_det in sign_model_detections:
-        if sign_det['detection_confidence'] > 0.4:
+        if sign_det['detection_confidence'] > SIGN_MODEL_THRESHOLD:
             sign_det['source'] = 'sign_model'
             sign_det['verified'] = False
             final_detections.append(sign_det)
 
     for veh_det in vehicle_model_sign_detections:
-        if veh_det['confidence'] > 0.6:
+        if veh_det['confidence'] > VEHICLE_MODEL_THRESHOLD:
             try:
                 x1, y1, x2, y2 = veh_det['bbox']
                 sign_crop = frame[y1:y2, x1:x2]
@@ -213,7 +217,7 @@ def combined_sign_detection_classification(frame):
                 class_confidence = classification_result['confidence']
                 class_idx = classification_result['class_index']
                 
-                if class_confidence > 0.4:
+                if class_confidence > CLASS_CONFIDENCE_THRESHOLD:
                     enhanced_det = {
                         'bbox': veh_det['bbox'],
                         'detection_class': veh_det['class'],
@@ -221,7 +225,8 @@ def combined_sign_detection_classification(frame):
                         'classification': classification,
                         'classification_confidence': class_confidence,
                         'source': 'vehicle_model',
-                        'verified': False
+                        'verified': False,
+                        'class_idx': class_idx
                     }
                     
                     final_detections.append(enhanced_det)
@@ -254,6 +259,11 @@ def combined_sign_detection_classification(frame):
                     break
                 else:
                     det2['skip'] = True
+    
+    for det in filtered_detections:
+        if 'classification' not in det or det['classification'] in ['unknown', 'traffic sign', 'traffic signs']:
+            if 'class_idx' in det and 0 <= det['class_idx'] < len(class_descriptions):
+                det['classification'] = class_descriptions[det['class_idx']]
     
     print(f"Combined sign detection returning {len(filtered_detections)} signs")
     return filtered_detections

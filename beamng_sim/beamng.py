@@ -7,18 +7,17 @@ from beamng_sim.utils.pid_controller import PIDController
 from beamngpy import BeamNGpy, Scenario, Vehicle
 from beamngpy.sensors import Camera, Lidar, Radar
 
-from ultralytics import YOLO
-import tensorflow as tf
-
 from beamng_sim.sign.detect_classify import random_brightness
 from config.config import SIGN_DETECTION_MODEL, SIGN_CLASSIFICATION_MODEL, VEHICLE_PEDESTRIAN_MODEL
 
-
+from ultralytics import YOLO
+import tensorflow as tf
 import numpy as np
 import time
 import math
 import cv2
-
+import csv
+import datetime
 
 from beamng_sim.lane_detection.main import process_frame as lane_detection_process_frame
 from beamng_sim.sign.main import process_frame as sign_process_frame
@@ -61,8 +60,8 @@ def sim_setup():
     beamng = BeamNGpy('localhost', 64256, home=r'C:\Users\user\Documents\beamng-tech\BeamNG.tech.v0.36.4.0')
     beamng.open()
 
-    #scenario = Scenario('west_coast_usa', 'lane_detection_city')
-    scenario = Scenario('west_coast_usa', 'lane_detection_highway')
+    scenario = Scenario('west_coast_usa', 'lane_detection_city')
+    #scenario = Scenario('west_coast_usa', 'lane_detection_highway')
 
     vehicle = Vehicle('ego_vehicle', model='etk800', licence='JULIAN')
     #vehicle = Vehicle('Q8', model='rsq8_600_tfsi', licence='JULIAN')
@@ -72,10 +71,10 @@ def sim_setup():
     rot_highway = yaw_to_quat(-135.678)
 
     # Street Spawn
-    #scenario.add_vehicle(vehicle, pos=(-730.212, 94.630, 118.517), rot_quat=rot_city)
+    scenario.add_vehicle(vehicle, pos=(-730.212, 94.630, 118.517), rot_quat=rot_city)
     
     # Highway Spawn
-    scenario.add_vehicle(vehicle, pos=(-287.210, 73.609, 112.363), rot_quat=rot_highway)
+    #scenario.add_vehicle(vehicle, pos=(-287.210, 73.609, 112.363), rot_quat=rot_highway)
 
     scenario.make(beamng)
 
@@ -233,14 +232,24 @@ def main():
 
     debug_window = LiveLidarDebugWindow()
 
-    pid = PIDController(Kp=0.15, Ki=0.002, Kd=0.2)
+    pid = PIDController(Kp=0.16, Ki=0.002, Kd=0.14)
 
     base_throttle = 0.05
     steering_bias = 0
-    max_steering_change = 0.1
+    max_steering_change = 0.15
     previous_steering = 0.0
 
     frame_count = 0
+
+    log_dir = "./beamng_sim/drive_log"
+    os.makedirs(log_dir, exist_ok=True)
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_filename = f"drive_log_{timestamp}.csv"
+    log_path = os.path.join(log_dir, log_filename)
+    log_fields = ["frame", "deviation_m", "lane_center", "vehicle_center", "steering", "throttle", "speed_kph"]
+    log_file = open(log_path, mode="w", newline="")
+    log_writer = csv.DictWriter(log_file, fieldnames=log_fields)
+    log_writer.writeheader()
 
     last_time = time.time()
     try:
@@ -251,7 +260,6 @@ def main():
             last_time = current_time
 
             try:
-                print(f"Stepping simulation")
                 beamng.control.step(10)
             except Exception as e:
                 print(f"Simulation step error: {e}")
@@ -261,7 +269,6 @@ def main():
 
             # Speed
             try:
-                print("Getting vehicle speed")
                 speed_mps, speed_kph = get_vehicle_speed(vehicle)
             except Exception as e:
                 print(f"Speed retrieval error: {e}")
@@ -273,7 +280,18 @@ def main():
             )
             cv2.imshow('Lane Detection', cv2.cvtColor(result, cv2.COLOR_RGB2BGR))
 
-            if step_i % 5 == 0:
+            # Log to CSV
+            log_writer.writerow({
+                "frame": step_i,
+                "deviation_m": round(deviation, 3),
+                "lane_center": round(lane_center, 3),
+                "vehicle_center": round(vehicle_center, 3),
+                "steering": round(steering, 3),
+                "throttle": round(throttle, 3),
+                "speed_kph": round(speed_kph, 3)
+            })
+
+            if step_i % 10 == 0:
                 # Sign Detection
                 sign_detections, sign_img = sign_detection_classification(img)
                 cv2.imshow('Sign Detection', sign_img)
@@ -294,9 +312,9 @@ def main():
             previous_steering = steering
             vehicle.control(steering=steering, throttle=throttle, brake=0.0)
 
-            if step_i % 10 == 0:
+            if step_i % 5 == 0:
                 print(f"[{step_i}] Deviation: {deviation:.3f}m | Steering: {steering:.3f} | Throttle: {throttle:.3f}")
-                print(f"Frame {step_i}: lane_center={lane_center}, vehicle_center={vehicle_center}")
+                print(f"[{step_i}] lane_center={lane_center}, vehicle_center={vehicle_center}, speed={speed_kph:.2f} kph")
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
             frame_count += 1
@@ -307,6 +325,7 @@ def main():
     except Exception as e:
         print(f"Error: {e}")
     finally:
+        log_file.close()
         cv2.destroyAllWindows()
         beamng.close()
         debug_window.close()
