@@ -49,6 +49,32 @@ def perspective_warp(img, speed=0, debugger=None):
     return binary_warped, Minv
 
 
+def debug_perspective_live(img, speed_kph):
+    debug_img = img.copy()
+    
+    src_points = get_src_points(img.shape, speed_kph)
+    
+    src_int = src_points.astype(np.int32)
+    
+    cv2.polylines(debug_img, [src_int], isClosed=True, color=(0, 255, 0), thickness=2)
+    
+    labels = ['Bottom Left', 'Bottom Right', 'Top Right', 'Top Left']
+    colors = [(0, 255, 0), (255, 0, 0), (255, 255, 0), (255, 0, 255)]
+    
+    for i, (point, label, color) in enumerate(zip(src_int, labels, colors)):
+        cv2.circle(debug_img, tuple(point), 5, color, -1)
+        cv2.putText(debug_img, label, (point[0] + 10, point[1] - 10), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+    
+    cv2.putText(debug_img, f"Speed: {speed_kph:.1f} km/h", (10, 30), 
+               cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+    cv2.putText(debug_img, "Perspective Transform Region", (10, 60), 
+               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+    cv2.putText(debug_img, "Green: Transform Area", (10, 80), 
+               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+    
+    cv2.imshow('Perspective Transform Debug', debug_img)
+
 def debug_perspective_points(img, speeds=[0, 60, 120]):
     img_size = (img.shape[1], img.shape[0])
     w, h = img_size
