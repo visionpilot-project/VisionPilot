@@ -1,8 +1,11 @@
 
 # 🚗 Self-Driving Car Simulation: Computer Vision, Deep Learning & Real-Time Perception (BeamNG.tech)
 
-![GitHub stars](https://img.shields.io/github/stars/Julian1777/self-driving-project?style=social)
-
+<p align="center">
+  <a href="https://star-history.com/#Julian1777/self-driving-project&Date">
+    <img src="https://api.star-history.com/svg?repos=Julian1777/self-driving-project&type=Date" alt="Star History Chart" />
+  </a>
+</p>
 
 A modular Python project for autonomous driving research and prototyping, now fully integrated with the BeamNG.tech simulator. This system combines traditional computer vision and state-of-the-art deep learning (CNN, U-Net, YOLO, SCNN) to tackle:
 
