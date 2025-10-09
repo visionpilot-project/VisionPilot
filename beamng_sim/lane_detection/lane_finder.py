@@ -3,11 +3,27 @@ import cv2
 
 
 def get_histogram(binary_warped):
+    """
+    Compute the histogram of the bottom half of the binary warped image.
+    Args:
+        binary_warped (numpy array): Warped binary image
+    Returns:
+        numpy array: Histogram of pixel intensities along the x-axis
+    """
     histogram = np.sum(binary_warped[binary_warped.shape[0]//2:,:], axis=0)
     return histogram
 
 
 def sliding_window_search(binary_warped, histogram, debugger=None):
+    """
+    Perform sliding window search to find lane lines in a binary warped image.
+    Args:
+        binary_warped (numpy array): Warped binary image
+        histogram (numpy array): Histogram of pixel intensities along the x-axis
+        debugger (object, optional): Debugger object for visualization
+    Returns:
+        tuple: (ploty, left_fit, right_fit, left_fitx, right_fitx
+    """
     out_img = np.dstack((binary_warped, binary_warped, binary_warped)) * 255
     out_img = np.clip(out_img, 0, 255).astype(np.uint8)
     

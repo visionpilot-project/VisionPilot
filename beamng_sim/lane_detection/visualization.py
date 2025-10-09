@@ -3,6 +3,22 @@ import cv2
 
 
 def draw_lane_overlay(original_image, warped_image, Minv, left_fitx, right_fitx, ploty, deviation):
+    """
+    Draw the detected lane area and lane lines on the original image.
+    Lane lines are colored based on vehicle deviation from lane center.
+    
+    Args:
+        Original_image: The original undistorted image
+        warped_image: The warped binary image
+        Minv: Inverse perspective transform matrix
+        left_fitx: X coordinates for left lane line
+        right_fitx: X coordinates for right lane line
+        ploty: Y coordinates for lane fitting
+        deviation: Vehicle deviation from lane center in meters
+    Returns:
+        Resulting image with lane overlay
+    """
+    
     if len(left_fitx) == 0 or len(right_fitx) == 0 or len(ploty) == 0:
         return original_image
     
@@ -45,6 +61,19 @@ def draw_lane_overlay(original_image, warped_image, Minv, left_fitx, right_fitx,
 
 
 def add_text_overlay(image, left_curverad, right_curverad, deviation, avg_brightness, speed):
+    """
+    Add text overlay with lane curvature, deviation, average brightness, and speed.
+    Args:
+        image: Image to add text overlay on
+        left_curverad: Left lane line curvature in meters
+        right_curverad: Right lane line curvature in meters
+        deviation: Vehicle deviation from lane center in meters
+        avg_brightness: Average brightness of the image
+        speed: Vehicle speed in km/h
+    Returns:
+        Image with text overlay
+    """
+
     fontType = cv2.FONT_HERSHEY_SIMPLEX
     
     if left_curverad is None or right_curverad is None:

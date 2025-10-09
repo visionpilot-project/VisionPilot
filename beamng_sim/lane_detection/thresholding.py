@@ -234,18 +234,18 @@ def apply_thresholds(image, src_points=None, debugger=None, debug_display=False)
         final_vis[combined_binary == 1] = [255, 255, 255]
         
         grad_display = np.dstack((grad_binary_uint8, grad_binary_uint8, grad_binary_uint8)) * 255
-        cv2.imshow('1a. Gradient Threshold', grad_display)
+        cv2.imshow('Gradient Threshold', grad_display)
         
         color_display = np.dstack((color_binary_uint8, color_binary_uint8, color_binary_uint8)) * 255
-        cv2.imshow('1b. Color Threshold', color_display)
+        cv2.imshow('Color Threshold', color_display)
         
         combined_display_array = combined_binary.astype(np.uint8)
         combined_display = np.dstack((combined_display_array, combined_display_array, combined_display_array)) * 255
-        cv2.imshow('1. Lane Detection Combined', combined_display)
+        cv2.imshow('Lane Detection Combined', combined_display)
+
+        cv2.imshow('Detection Method Contributions', debug_display)
         
-        cv2.imshow('1c. Detection Method Contributions', debug_display)
-        
-        cv2.imshow('1d. Final Output Pixels', final_vis)
+        cv2.imshow('Final Output Pixels', final_vis)
 
     if debugger:
         debugger.debug_thresholding(image, grad_binary, color_binary, combined_binary)

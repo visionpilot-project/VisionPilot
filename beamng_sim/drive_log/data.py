@@ -3,6 +3,10 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 
+"""
+Using the latest CSV log file, deviation and steering is plotted.
+"""
+
 files = [f for f in os.listdir('.') if f.endswith('.csv')]
 if files:
 	latest = max(files, key=os.path.getctime)

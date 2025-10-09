@@ -31,26 +31,37 @@ from beamng_sim.lidar.lidar_lane_debug import LiveLidarDebugWindow
 MODELS = {}
 
 def yaw_to_quat(yaw_deg):
+    """
+    Convert yaw angle in degrees to a quaternion representation for vehicle orientation.
+    Args:
+        yaw_deg (float): Yaw angle in degrees
+    Returns:
+        tuple: Quaternion (x, y, z, w)
+    """
     yaw = math.radians(yaw_deg)
     w = math.cos(yaw / 2)
     z = math.sin(yaw / 2)
     return (0.0, 0.0, z, w)
 
-def load_models():    
+def load_models():
+    """
+    Load all the models into a global dictionary for use in detection or classification.
+    This way models are only loaded once.
+    """
     print("Loading models")
 
-    # Load sign detection model
+    # Sign detection model
     MODELS['sign_detect'] = YOLO(str(SIGN_DETECTION_MODEL))
     print("Sign detection model loaded")
-    
-    # Load sign classification model with custom objects used during training
+
+    # Sign classification model with custom objects used during training
     MODELS['sign_classify'] = tf.keras.models.load_model(
         str(SIGN_CLASSIFICATION_MODEL), 
         custom_objects={"random_brightness": random_brightness}
     )
     print("Sign classification model loaded")
     
-    # Load vehicle detection model 
+    # Vehicle detection model 
     MODELS['vehicle'] = YOLO(str(VEHICLE_PEDESTRIAN_MODEL))
     print("Vehicle detection model loaded")
     
@@ -58,6 +69,10 @@ def load_models():
 
 
 def sim_setup():
+    """
+    Setup BeamNG simulation, scenario, vehicle, spawn point and sensors.
+    """
+
     beamng = BeamNGpy('localhost', 64256, home=r'C:\Users\user\Documents\beamng-tech\BeamNG.tech.v0.36.4.0')
     beamng.open()
 
@@ -147,6 +162,13 @@ def sim_setup():
     return beamng, scenario, vehicle, camera, lidar, # radar
 
 def get_vehicle_speed(vehicle):
+    """
+    Get the vehicle speed in m/s and kph.
+    Args:
+        vehicle (Vehicle): BeamNG vehicle object
+    Returns:
+        tuple: (speed_mps, speed_kph)
+    """
 
     vehicle.poll_sensors()
     if 'vel' in vehicle.state:
@@ -158,36 +180,34 @@ def get_vehicle_speed(vehicle):
 
     return speed_mps, speed_kph
 
-def lane_detection(img, speed_kph, pid, previous_steering, base_throttle, steering_bias, max_steering_change, dead_zone, alpha):
-    result, metrics = lane_detection_process_frame(img, speed=speed_kph, debug_display=True)
+def lane_detection(img, speed_kph, pid, previous_steering, base_throttle, steering_bias, max_steering_change):
+    """
+    Process lane detection and calculate steering/throttle commands.
+
+    Args:
+        img (numpy array): Input image from the camera
+        speed_kph (float): Vehicle speed in kilometers per hour
+        pid (PIDController): PID controller instance for steering
+        previous_steering (float): Previous steering angle
+        base_throttle (float): Base throttle value
+        steering_bias (float): Steering bias to adjust for vehicle alignment
+        max_steering_change (float): Maximum allowed change in steering per frame
+
+    Returns:
+        tuple: (result image, steering command, throttle command, smoothed_deviation, lane_center, vehicle_center)
+    """
+    result, metrics = lane_detection_process_frame(img, speed=speed_kph, previous_steering=previous_steering, debug_display=True)
 
     deviation = metrics.get('deviation', 0.0)
+    smoothed_deviation = metrics.get('smoothed_deviation', 0.0)
+    effective_deviation = metrics.get('effective_deviation', 0.0)
     lane_center = metrics.get('lane_center', 0.0)
     vehicle_center = metrics.get('vehicle_center', 0.0)
 
-    if deviation is None or lane_center is None or vehicle_center is None:
-        deviation, lane_center, vehicle_center = 0.0, 0.0, 0.0
-
-    if not hasattr(lane_detection, 'smoothed_deviation'):
-        lane_detection.smoothed_deviation = deviation
-    lane_detection.smoothed_deviation = (
-        alpha * deviation + (1 - alpha) * lane_detection.smoothed_deviation
-    )
-    smoothed_deviation = lane_detection.smoothed_deviation
-
-    if abs(smoothed_deviation) < dead_zone:
-        smoothed_deviation = 0.0
-        
-    if abs(smoothed_deviation) > 2.0:
-        print(f"Large deviation detected: {smoothed_deviation:.2f}m - using scaled response")
-        smoothed_deviation = np.clip(smoothed_deviation, -2.0, 2.0)
-    
-
-    steering = pid.update(-smoothed_deviation, 0.01)
+    steering = pid.update(-effective_deviation, 0.01)
     steering += steering_bias
     steering = np.clip(steering, -1.0, 1.0)
     steering_change = steering - previous_steering
-
     if abs(steering_change) > max_steering_change:
         steering = previous_steering + np.sign(steering_change) * max_steering_change
 
@@ -197,18 +217,30 @@ def lane_detection(img, speed_kph, pid, previous_steering, base_throttle, steeri
     return result, steering, throttle, smoothed_deviation, lane_center, vehicle_center
 
 def sign_detection_classification(img):
+    """
+    Process sign detection and classification on the input image.
+    """
     sign_detections, sign_img = sign_process_frame(img, draw_detections=True)
     return sign_detections, sign_img
 
 def vehicle_obstacle_detection(img):
+    """
+    Process vehicle and pedestrian detection on the input image.
+    """
     vehicle_obstacle_detections, vehicle_img = vehicle_obstacle_process_frame(img, draw_detections=True)
     return vehicle_obstacle_detections, vehicle_img
 
 # def lidar_object_detections(lidar_data, camera_detections=vehicle_obstacle_detection):
+#     """
+#     Process LiDAR data for object detection.
+#     """
 #     lidar_detections, lidar_obj_img = lidar_process_object_frame(lidar_data)
 #     return lidar_detections, lidar_obj_img
 
 def main():
+    """
+    Main function to run the simulation.
+    """
     try:
         load_models()
     except Exception as e:
@@ -246,17 +278,13 @@ def main():
 
     debug_perspective = True
 
-    pid = PIDController(Kp=0.14, Ki=0.0, Kd=0.16)
+    pid = PIDController(Kp=0.14, Ki=0.0, Kd=0.17)
 
-    base_throttle = 0.03
+    base_throttle = 0.02
 
     steering_bias = 0
     max_steering_change = 0.15
     previous_steering = 0.0
-
-    dead_zone = 0.1
-    # For deviation smoothing
-    alpha = 0.65
 
     frame_count = 0
 
@@ -297,7 +325,7 @@ def main():
 
             # Lane Detection
             result, steering, throttle, deviation, lane_center, vehicle_center = lane_detection(
-                img, speed_kph, pid, previous_steering, base_throttle, steering_bias, max_steering_change, dead_zone, alpha
+                img, speed_kph, pid, previous_steering, base_throttle, steering_bias, max_steering_change
             )
             cv2.imshow('Lane Detection', cv2.cvtColor(result, cv2.COLOR_RGB2BGR))
 
@@ -307,9 +335,9 @@ def main():
             # Log to CSV
             log_writer.writerow({
                 "frame": step_i,
-                "deviation_m": round(deviation, 3),
-                "lane_center": round(lane_center, 3),
-                "vehicle_center": round(vehicle_center, 3),
+                "deviation_m": round(deviation, 3) if deviation is not None else 0.0,
+                "lane_center": round(lane_center, 3) if lane_center is not None else 0.0,
+                "vehicle_center": round(vehicle_center, 3) if vehicle_center is not None else 0.0,
                 "steering": round(steering, 3),
                 "throttle": round(throttle, 3),
                 "speed_kph": round(speed_kph, 3)

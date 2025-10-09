@@ -4,16 +4,16 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from beamng_sim.lane_detection.thresholding import apply_thresholds
 from beamng_sim.lane_detection.perspective import get_src_points,perspective_warp
 from beamng_sim.lane_detection.lane_finder import get_histogram, sliding_window_search
-from beamng_sim.lane_detection.metrics import calculate_curvature_and_deviation
+from beamng_sim.lane_detection.metrics import calculate_curvature_and_deviation, process_deviation
 from beamng_sim.lane_detection.visualization import draw_lane_overlay, add_text_overlay
 import numpy as np
 import cv2
 
 
-def process_frame(frame, speed=0, debugger=None, debug_display=False):
+def process_frame(frame, speed=0, previous_steering=0, debugger=None, debug_display=True):
     try:
 
-        src_points = get_src_points(frame.shape, speed)
+        src_points = get_src_points(frame.shape, speed, previous_steering)
 
         binary_image, avg_brightness = apply_thresholds(frame, src_points=src_points, debugger=debugger, debug_display=debug_display)
         if debug_display:
@@ -51,9 +51,12 @@ def process_frame(frame, speed=0, debugger=None, debug_display=False):
         
         if metrics_result == (None, None, None, None, None):
             left_curverad, right_curverad, deviation, lane_center, vehicle_center = None, None, None, None, None
+            smoothed_deviation = 0.0
+            effective_deviation = 0.0
             print("Lane detection metrics calculation returned None values")
         else:
             left_curverad, right_curverad, deviation, lane_center, vehicle_center = metrics_result
+            smoothed_deviation, effective_deviation = process_deviation(deviation)
         
         result = draw_lane_overlay(frame, binary_warped, Minv, left_fitx, right_fitx, ploty, deviation)
         result = add_text_overlay(result, left_curverad, right_curverad, deviation, avg_brightness, speed)
@@ -62,6 +65,8 @@ def process_frame(frame, speed=0, debugger=None, debug_display=False):
             'left_curverad': left_curverad,
             'right_curverad': right_curverad,
             'deviation': deviation,
+            'smoothed_deviation': smoothed_deviation,
+            'effective_deviation': effective_deviation,
             'lane_center': lane_center,
             'vehicle_center': vehicle_center
         }
@@ -75,6 +80,8 @@ def process_frame(frame, speed=0, debugger=None, debug_display=False):
             'left_curverad': 0,
             'right_curverad': 0,
             'deviation': 0,
+            'smoothed_deviation': 0,
+            'effective_deviation': 0,
             'lane_center': 0,
             'vehicle_center': 0,
             'error': str(e)
