@@ -21,3 +21,4 @@ __pycache__/
 *.pkl
 
 *.jar
+lane-detection-cnn/unet/lane_detection_unet.py
