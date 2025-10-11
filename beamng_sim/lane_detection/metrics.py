@@ -128,7 +128,7 @@ def check_lane_width_outliers(lane_width_pix):
     return True
 
 
-def calculate_curvature_and_deviation(ploty, left_fitx, right_fitx, binary_warped, debugger=None):
+def calculate_curvature_and_deviation(ploty, left_fitx, right_fitx, binary_warped):
     """
     Calculate lane curvature and vehicle deviation from lane center.
     
@@ -137,8 +137,6 @@ def calculate_curvature_and_deviation(ploty, left_fitx, right_fitx, binary_warpe
         left_fitx: X coordinates for left lane line
         right_fitx: X coordinates for right lane line
         binary_warped: Warped binary image for reference
-        debugger: Optional debugger object
-        
     Returns:
         tuple: (left_curverad, right_curverad, deviation_m, lane_center, vehicle_center)
                Returns (None, None, None, None, None) if validation fails
@@ -194,10 +192,6 @@ def calculate_curvature_and_deviation(ploty, left_fitx, right_fitx, binary_warpe
         if abs(deviation_m) > max_reasonable_deviation:
             print(f"Unreasonable deviation detected: {deviation_m:.2f}m, clipping to {max_reasonable_deviation:.2f}m")
             deviation_m = np.clip(deviation_m, -max_reasonable_deviation, max_reasonable_deviation)
-
-        if debugger:
-            debugger.debug_metrics(left_curverad, right_curverad, deviation_m, lane_center, 
-                                 vehicle_center, lane_width_pix, xm_per_pix)
 
         return left_curverad, right_curverad, deviation_m, lane_center, vehicle_center
         

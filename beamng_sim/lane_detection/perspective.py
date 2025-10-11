@@ -41,15 +41,13 @@ def get_src_points(image_shape, speed=0, previous_steering=0):
     ])
     return src
 
-def perspective_warp(img, speed=0, debugger=None):
+def perspective_warp(img, speed=0, debug_display=False):
     """
     Applies perspective transform to the passed image using the source points generated
 
     Args:
         img (numpy array): Input image to be warped
         speed (float): Speed of the vehicle in km/h
-        debugger (object, optional): Debugger object for visualization
-    
     Returns:
         tuple: (warped image, inverse perspective transform matrix)
     """
@@ -71,8 +69,8 @@ def perspective_warp(img, speed=0, debugger=None):
     binary_warped = cv2.warpPerspective(img, M, img_size, flags=cv2.INTER_LINEAR)
     
     # Debug perspective transform
-    if debugger:
-        debugger.debug_perspective_transform(img, binary_warped, src, dst)
+    if debug_display:
+        debug_perspective_live(img, speed, previous_steering=0)
     
     return binary_warped, Minv
 

@@ -10,27 +10,27 @@ import numpy as np
 import cv2
 
 
-def process_frame(frame, speed=0, previous_steering=0, debugger=None, debug_display=True):
+def process_frame_cv(img, speed=0, previous_steering=0, debug_display=False):
     try:
 
-        src_points = get_src_points(frame.shape, speed, previous_steering)
+        src_points = get_src_points(img.shape, speed, previous_steering)
 
-        binary_image, avg_brightness = apply_thresholds(frame, src_points=src_points, debugger=debugger, debug_display=debug_display)
+        binary_image, avg_brightness = apply_thresholds(img, src_points=src_points, debug_display=debug_display)
         if debug_display:
             cv2.imshow('1. Binary Image', binary_image*255 if binary_image.max()<=1 else binary_image)
             cv2.waitKey(1)
         
-        binary_warped, Minv = perspective_warp(binary_image, speed=speed, debugger=debugger)
+        binary_warped, Minv = perspective_warp(binary_image, speed=speed, debug_display=debug_display)
         
         if debug_display:
             warped_display = np.dstack((binary_warped, binary_warped, binary_warped)) * 255
             cv2.imshow('2. Warped Binary', warped_display)
         
         histogram = get_histogram(binary_warped)
-        ploty, left_fit, right_fit, left_fitx, right_fitx = sliding_window_search(binary_warped, histogram, debugger)
+        ploty, left_fit, right_fit, left_fitx, right_fitx = sliding_window_search(binary_warped, histogram)
         
         if debug_display:
-            lane_img = np.zeros_like(frame)
+            lane_img = np.zeros_like(img)
             
             if len(left_fitx) > 0 and len(right_fitx) > 0 and len(ploty) > 0:
                 try:
@@ -47,7 +47,7 @@ def process_frame(frame, speed=0, previous_steering=0, debugger=None, debug_disp
             
             cv2.imshow('3. Lane Lines', lane_img)
         
-        metrics_result = calculate_curvature_and_deviation(ploty, left_fitx, right_fitx, binary_warped, debugger)
+        metrics_result = calculate_curvature_and_deviation(ploty, left_fitx, right_fitx, binary_warped)
         
         if metrics_result == (None, None, None, None, None):
             left_curverad, right_curverad, deviation, lane_center, vehicle_center = None, None, None, None, None
@@ -57,8 +57,8 @@ def process_frame(frame, speed=0, previous_steering=0, debugger=None, debug_disp
         else:
             left_curverad, right_curverad, deviation, lane_center, vehicle_center = metrics_result
             smoothed_deviation, effective_deviation = process_deviation(deviation)
-        
-        result = draw_lane_overlay(frame, binary_warped, Minv, left_fitx, right_fitx, ploty, deviation)
+
+        result = draw_lane_overlay(img, binary_warped, Minv, left_fitx, right_fitx, ploty, deviation)
         result = add_text_overlay(result, left_curverad, right_curverad, deviation, avg_brightness, speed)
         
         metrics = {
@@ -75,7 +75,7 @@ def process_frame(frame, speed=0, previous_steering=0, debugger=None, debug_disp
         
     except Exception as e:
         print(f"Lane detection error: {e}")
-        result = frame.copy()
+        result = img.copy()
         metrics = {
             'left_curverad': 0,
             'right_curverad': 0,
@@ -87,3 +87,6 @@ def process_frame(frame, speed=0, previous_steering=0, debugger=None, debug_disp
             'error': str(e)
         }
         return result, metrics
+    
+def process_frame_unet(frame, speed=0, previous_steering=0, debug_display=True):
+    pass

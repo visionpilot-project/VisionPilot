@@ -199,7 +199,7 @@ def combine_thresholds(color_binary, gradient_binary, avg_brightness=None):
     return combined_binary
 
 
-def apply_thresholds(image, src_points=None, debugger=None, debug_display=False):
+def apply_thresholds(image, src_points=None, debug_display=False):
 
     if src_points is not None:
         mask = np.zeros(image.shape[:2], dtype=np.uint8)
@@ -246,8 +246,5 @@ def apply_thresholds(image, src_points=None, debugger=None, debug_display=False)
         cv2.imshow('Detection Method Contributions', debug_display)
         
         cv2.imshow('Final Output Pixels', final_vis)
-
-    if debugger:
-        debugger.debug_thresholding(image, grad_binary, color_binary, combined_binary)
 
     return combined_binary, avg_brightness

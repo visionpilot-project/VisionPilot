@@ -19,12 +19,15 @@ import cv2
 import csv
 import datetime
 
-from beamng_sim.lane_detection.main import process_frame as lane_detection_process_frame
+from beamng_sim.lane_detection.main import process_frame_cv as lane_detection_cv_process_frame
+from beamng_sim.lane_detection.main import process_frame_unet as lane_detection_unet_process_frame
 from beamng_sim.lane_detection.perspective import debug_perspective_live
 from beamng_sim.sign.main import process_frame as sign_process_frame
 from beamng_sim.vehicle_obstacle.main import process_frame as vehicle_obstacle_process_frame
 from beamng_sim.lidar.main import process_frame as lidar_process_frame
 from beamng_sim.radar.main import process_frame as radar_process_frame
+
+from beamng_sim.lane_detection.fusion import lane_detection_fused
 
 from beamng_sim.lidar.lidar_lane_debug import LiveLidarDebugWindow
 
@@ -180,29 +183,19 @@ def get_vehicle_speed(vehicle):
 
     return speed_mps, speed_kph
 
-def lane_detection(img, speed_kph, pid, previous_steering, base_throttle, steering_bias, max_steering_change):
-    """
-    Process lane detection and calculate steering/throttle commands.
 
-    Args:
-        img (numpy array): Input image from the camera
-        speed_kph (float): Vehicle speed in kilometers per hour
-        pid (PIDController): PID controller instance for steering
-        previous_steering (float): Previous steering angle
-        base_throttle (float): Base throttle value
-        steering_bias (float): Steering bias to adjust for vehicle alignment
-        max_steering_change (float): Maximum allowed change in steering per frame
+def lane_detection_fused(img, speed_kph, pid, previous_steering, base_throttle, steering_bias, max_steering_change):
 
-    Returns:
-        tuple: (result image, steering command, throttle command, smoothed_deviation, lane_center, vehicle_center)
-    """
-    result, metrics = lane_detection_process_frame(img, speed=speed_kph, previous_steering=previous_steering, debug_display=True)
+    cv_result, cv_metrics, cv_conf = lane_detection_cv_process_frame(img, speed=speed_kph, previous_steering=previous_steering, debug_display=True)
+    unet_result, unet_metrics, unet_conf = lane_detection_unet_process_frame(img, speed=speed_kph, previous_steering=previous_steering, debug_display=True)
 
-    deviation = metrics.get('deviation', 0.0)
-    smoothed_deviation = metrics.get('smoothed_deviation', 0.0)
-    effective_deviation = metrics.get('effective_deviation', 0.0)
-    lane_center = metrics.get('lane_center', 0.0)
-    vehicle_center = metrics.get('vehicle_center', 0.0)
+    fused_metrics = lane_detection_fused(cv_metrics, cv_conf, unet_metrics, unet_conf)
+
+    deviation = fused_metrics.get('deviation', 0.0)
+    smoothed_deviation = fused_metrics.get('smoothed_deviation', 0.0)
+    effective_deviation = fused_metrics.get('effective_deviation', 0.0)
+    lane_center = fused_metrics.get('lane_center', 0.0)
+    vehicle_center = fused_metrics.get('vehicle_center', 0.0)
 
     steering = pid.update(-effective_deviation, 0.01)
     steering += steering_bias
@@ -213,6 +206,8 @@ def lane_detection(img, speed_kph, pid, previous_steering, base_throttle, steeri
 
     throttle = base_throttle * (1.0 - 0.3 * abs(steering))
     throttle = np.clip(throttle, 0.05, 0.3)
+
+    result = cv_result if cv_conf > unet_conf else unet_result # CHANGE
 
     return result, steering, throttle, smoothed_deviation, lane_center, vehicle_center
 
@@ -276,8 +271,6 @@ def main():
 
     debug_window = LiveLidarDebugWindow()
 
-    debug_perspective = True
-
     pid = PIDController(Kp=0.14, Ki=0.0, Kd=0.17)
 
     base_throttle = 0.02
@@ -324,13 +317,10 @@ def main():
                 break
 
             # Lane Detection
-            result, steering, throttle, deviation, lane_center, vehicle_center = lane_detection(
+            result, steering, throttle, deviation, lane_center, vehicle_center = lane_detection_fused(
                 img, speed_kph, pid, previous_steering, base_throttle, steering_bias, max_steering_change
             )
             cv2.imshow('Lane Detection', cv2.cvtColor(result, cv2.COLOR_RGB2BGR))
-
-            if debug_perspective:
-                debug_perspective_live(img, speed_kph)
 
             # Log to CSV
             log_writer.writerow({

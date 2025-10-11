@@ -14,13 +14,12 @@ def get_histogram(binary_warped):
     return histogram
 
 
-def sliding_window_search(binary_warped, histogram, debugger=None):
+def sliding_window_search(binary_warped, histogram):
     """
     Perform sliding window search to find lane lines in a binary warped image.
     Args:
         binary_warped (numpy array): Warped binary image
         histogram (numpy array): Histogram of pixel intensities along the x-axis
-        debugger (object, optional): Debugger object for visualization
     Returns:
         tuple: (ploty, left_fit, right_fit, left_fitx, right_fitx
     """
@@ -88,10 +87,6 @@ def sliding_window_search(binary_warped, histogram, debugger=None):
         right_fitx = np.full_like(ploty, 3 * binary_warped.shape[1] // 4)
         left_fit = np.array([0, 0, binary_warped.shape[1] // 4])
         right_fit = np.array([0, 0, 3 * binary_warped.shape[1] // 4])
-        
-        if debugger:
-            debugger.debug_lane_finding(binary_warped, histogram, ([], []), ([], []), 
-                                       left_fitx, right_fitx, ploty)
         
         return ploty, left_fit, right_fit, left_fitx, right_fitx
 
@@ -168,9 +163,6 @@ def sliding_window_search(binary_warped, histogram, debugger=None):
             right_fit = np.array([0, 0, 3 * binary_warped.shape[1] // 4])
             sliding_window_search.grace_counter = 0
             sliding_window_search.last_valid = None
-        if debugger:
-            debugger.debug_lane_finding(binary_warped, histogram, ([], []), ([], []), 
-                                       left_fitx, right_fitx, ploty)
         return ploty, left_fit, right_fit, left_fitx, right_fitx
 
     sliding_window_search.grace_counter = 0
@@ -192,15 +184,6 @@ def sliding_window_search(binary_warped, histogram, debugger=None):
         out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
         out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
         
-        if debugger:
-            left_points = (lefty, leftx) if len(leftx) > 0 else ([], [])
-            right_points = (righty, rightx) if len(rightx) > 0 else ([], [])
-            debugger.debug_lane_finding(binary_warped, histogram, left_points, right_points, 
-                                       left_fitx, right_fitx, ploty)
-            
-            debugger.plot_lane_points_interactive(left_points, right_points, left_fitx, right_fitx, 
-                                                ploty, binary_warped)
-        
         return ploty, left_fit, right_fit, left_fitx, right_fitx
         
     except Exception as e:
@@ -210,9 +193,5 @@ def sliding_window_search(binary_warped, histogram, debugger=None):
         right_fitx = np.full_like(ploty, 3 * binary_warped.shape[1] // 4)
         left_fit = np.array([0, 0, binary_warped.shape[1] // 4])
         right_fit = np.array([0, 0, 3 * binary_warped.shape[1] // 4])
-        
-        if debugger:
-            debugger.debug_lane_finding(binary_warped, histogram, ([], []), ([], []), 
-                                       left_fitx, right_fitx, ploty)
-        
+
         return ploty, left_fit, right_fit, left_fitx, right_fitx
