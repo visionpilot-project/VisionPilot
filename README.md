@@ -201,11 +201,11 @@ self-driving-car-simulation/
 
 - [x] Sign classification & Detection (CNN)
 - [x] Traffic light classification & Detection
-- [x] ⭐ Lane detection (CNN, CV)
-- [x] ⭐ Advanced lane detection using OpenCV (robust city/highway, lighting, outlier handling) *(completed, still tuning)*
+- [x] Lane detection (CNN, CV)
+- [x] ⭐ Advanced lane detection using OpenCV (robust city/highway, lighting, outlier handling)
 - [x] Integrate and test in BeamNG.tech simulation (replacing CARLA)
-- [x] ⭐ Tweak lane detection parameters and thresholds *(completed, still tuning)*
-- [x] ⭐ Integrate Radar
+- [x] Tweak lane detection parameters and thresholds
+- [ ] Integrate Radar
 - [x] Integrate Lidar
 - [ ] Lidar Object Detection (Maybe even train a model)
 - [ ] Lidar lane boundry detection (Debug Not working, not implemented in pipeline)
@@ -215,11 +215,20 @@ self-driving-car-simulation/
 - [ ] Test different weather and lighting conditions
 - [x] ⭐ Begin integration of other models (sign, light, pedestrian, etc.)
 - [ ] Adaptive Cruise Control
-- [ ] Emergency Breaking
+- [ ] Emergency Breaking / Collision Avoidance
+- [ ] Weather condition detection
 
 **Future / Stretch Goals**
+- [ ] Docker containarization
+- [ ] Blindspot Monitoring
+- [ ] SLAM
+- [ ] GPS/IMU sensor
+- [ ] Map Matching algorithm
+- [ ] Global and Local path planning
+- [ ] 💤 Behaviour planning and anticipation
 - [ ] Test using actual RC car
 - [ ] 💤 End-to-end driving policy learning (RL, imitation learning)
+- [ ] 💤 Multi Camera
 - [ ] 💤 Advanced traffic participant prediction (trajectory, intent)
 - [ ] 💤 Interactive web dashboard for results/visualizations
 
