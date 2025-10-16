@@ -121,26 +121,15 @@ def create_mask_overlay(img, mask, alpha=0.4, color=(0, 255, 0)):
     try:
         if img.dtype != np.uint8:
             img = img.astype(np.uint8)
-        
-        mask_debug = mask.copy() if mask.max() <= 1 else (mask > 0).astype(np.uint8)
-        mask_debug_display = mask_debug * 255
-        if mask_debug_display.shape[:2] != img.shape[:2]:
-            mask_debug_display = cv2.resize(mask_debug_display, (img.shape[1], img.shape[0]))
-        cv2.imshow('Debug: Mask Before Overlay', mask_debug_display)
             
         if mask.shape[:2] != img.shape[:2]:
-            print(f"Resizing mask from {mask.shape} to {img.shape[:2]}")
             mask = cv2.resize(mask, (img.shape[1], img.shape[0]))
         
         if mask.max() > 1:
-            print("Normalizing mask to binary")
             mask = (mask > 0).astype(np.uint8)
-        
-        print(f"Mask stats: min={mask.min()}, max={mask.max()}, count of positive={np.count_nonzero(mask)}")
         
         colored_mask = np.zeros_like(img)
         colored_mask[mask > 0] = color
-        cv2.imshow('Debug: Colored Mask', colored_mask)
         
         overlay = img.copy()
         mask_bool = mask > 0
@@ -154,10 +143,6 @@ def create_mask_overlay(img, mask, alpha=0.4, color=(0, 255, 0)):
         
         result = overlay.astype(np.uint8)
         
-        debug_comparison = np.hstack([img, result])
-        cv2.imshow('Debug: Original vs Overlay', debug_comparison)
-        
-        print(f"Overlay created with shape {result.shape}")
         return result
         
     except Exception as e:

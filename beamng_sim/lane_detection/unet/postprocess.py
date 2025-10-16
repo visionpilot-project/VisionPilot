@@ -70,23 +70,6 @@ def filter_components(mask, min_area=2000):
             
     return mask_filtered
 
-def thin_mask(mask, kernel_size=(5, 5), iterations=1):
-    """
-    Thin the mask using erosion
-    
-    Args:
-        mask (np.array): Binary mask to thin
-        kernel_size (tuple): Size of the kernel for erosion
-        iterations (int): Number of erosion iterations
-    
-    Returns:
-        np.array: Thinned binary mask
-    """
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernel_size)
-    mask = cv2.erode(mask, kernel, iterations=iterations)
-    
-    return mask
-
 def process_unet_mask(mask, src_points, min_area=2000):
     """
     Apply all post-processing steps to the UNet mask
@@ -109,9 +92,6 @@ def process_unet_mask(mask, src_points, min_area=2000):
     # Filter components by area
     mask = filter_components(mask, min_area=min_area)
     
-    # Thin the mask
-    mask = thin_mask(mask)
-    
     return mask
 
 def run_unet_on_frame(img, model):
@@ -130,11 +110,7 @@ def run_unet_on_frame(img, model):
     img_resized = cv2.resize(img_rgb, (IMG_SIZE[1], IMG_SIZE[0]))
     input_tensor = np.expand_dims(img_resized, axis=0)
     
-    print(f"UNet input tensor shape: {input_tensor.shape}, dtype: {input_tensor.dtype}")
-    
     pred = model.predict(input_tensor, verbose=0)[0]
-    
-    print(f"UNet raw prediction: shape={pred.shape}, min={pred.min():.4f}, max={pred.max():.4f}, mean={pred.mean():.4f}")
     
     pred_mask = (pred.squeeze() >= 0.2).astype(np.uint8)
     

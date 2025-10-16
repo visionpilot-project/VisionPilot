@@ -126,7 +126,7 @@ def lane_geometry(left_fitx, right_fitx, ploty):
         
     except Exception as e:
         print(f"Error in lane_geometry: {e}")
-        return 0.3
+        return 0.0
 
 def temporal_consistency(current_fit, previous_fit):
     """

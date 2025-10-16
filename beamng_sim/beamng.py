@@ -201,7 +201,7 @@ def lane_detection_fused(img, speed_kph, pid, previous_steering, base_throttle, 
     cv_result, cv_metrics, cv_conf = lane_detection_cv_process_frame(img, speed=speed_kph, previous_steering=previous_steering, debug_display=False, perspective_debug_display=True)
 
     if lane_detection_fused.unet_cache['last_frame'] is None or step_i - lane_detection_fused.unet_cache['last_frame'] >= 5:
-        unet_result, unet_metrics, unet_conf = lane_detection_unet_process_frame(img, model=MODELS['lane_unet'], speed=speed_kph, previous_steering=previous_steering, debug_display=True)
+        unet_result, unet_metrics, unet_conf = lane_detection_unet_process_frame(img, model=MODELS['lane_unet'], speed=speed_kph, previous_steering=previous_steering, debug_display=False)
         lane_detection_fused.unet_cache = {
             'result': unet_result,
             'metrics': unet_metrics,
@@ -365,7 +365,7 @@ def main():
             })
 
 
-            if step_i % 20 == 0:
+            if step_i % 80 == 0: # Lower later
                 # Sign Detection
                 sign_detections, sign_img = sign_detection_classification(img)
                 cv2.imshow('Sign Detection', sign_img)
@@ -388,7 +388,7 @@ def main():
 
             if step_i % 5 == 0:
                 print(f"[{step_i}] Deviation: {deviation:.3f}m | Steering: {steering:.3f} | Throttle: {throttle:.3f}")
-                print(f"[{step_i}] lane_center={lane_center}, vehicle_center={vehicle_center}, speed={speed_kph:.2f} kph")
+                print(f"[{step_i}] lane_center={lane_center:.3f}, vehicle_center={vehicle_center}, speed={speed_kph:.2f} kph")
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
             frame_count += 1

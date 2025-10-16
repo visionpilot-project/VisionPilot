@@ -120,15 +120,31 @@ def process_frame_unet(img, model, speed=0, previous_steering=0, debug_display=F
         
         src_points = get_src_points(img.shape, speed, previous_steering)
         
-        mask = process_unet_mask(raw_mask, src_points, min_area=2000)
+        scale_x = raw_mask.shape[1] / img.shape[1]  # 320 / original_width
+        scale_y = raw_mask.shape[0] / img.shape[0]  # 256 / original_height
+        
+        scaled_src_points = src_points.copy()
+        scaled_src_points[:, 0] *= scale_x
+        scaled_src_points[:, 1] *= scale_y
+        
+        mask = process_unet_mask(raw_mask, scaled_src_points, min_area=100)
         
         if debug_display:
             display_mask = cv2.resize(mask * 255, (img.shape[1], img.shape[0]))
             cv2.imshow('2. Processed UNet Mask', display_mask)
         
-        binary_warped, Minv = perspective_warp(mask, speed=speed)
+        debug_mask_with_points = cv2.cvtColor(mask.copy()*255, cv2.COLOR_GRAY2BGR)
+        for point in scaled_src_points:
+            x, y = int(point[0]), int(point[1])
+            if 0 <= x < mask.shape[1] and 0 <= y < mask.shape[0]:  # Check bounds
+                cv2.circle(debug_mask_with_points, (x, y), 5, (0, 0, 255), -1)  # Red circle
         
-        # Display the warped binary image if debugging
+        if debug_display:
+            cv2.imshow('Debug: Mask with Scaled Points', debug_mask_with_points)
+        resized_mask = cv2.resize(mask, (img.shape[1], img.shape[0]))
+        
+        binary_warped, Minv = perspective_warp(resized_mask, speed=speed)
+        
         if debug_display:
             warped_display = np.dstack((binary_warped, binary_warped, binary_warped)) * 255
             cv2.imshow('3. Warped Binary UNet', warped_display)
@@ -172,7 +188,7 @@ def process_frame_unet(img, model, speed=0, previous_steering=0, debug_display=F
 
         result = draw_lane_overlay(img.copy(), binary_warped, Minv, left_fitx, right_fitx, ploty, deviation)
         
-        result = create_mask_overlay(result, mask, alpha=0.3, color=(0, 255, 0))
+        result = create_mask_overlay(result, mask, alpha=0.3, color=(0, 0, 255))
         
         result = add_text_overlay(result, left_curverad, right_curverad, deviation, 0, speed, confidence=confidence)
         
