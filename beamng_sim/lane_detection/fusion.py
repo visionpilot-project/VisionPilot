@@ -37,7 +37,7 @@ def fuse_lane_metrics(cv_metrics, cv_conf, unet_metrics, unet_conf):
         'effective_deviation': weighted('effective_deviation'),
         'lane_center': weighted('lane_center'),
         'vehicle_center': weighted('vehicle_center'),
-        'confidence': max(cv_conf, unet_conf)
+        'confidence': (cv_conf * cv_conf + unet_conf * unet_conf) / total_conf
     }
-    print(f"Fused metrics: {fused:.3f}")
+    print(f"Fused metrics: {fused}")
     return fused

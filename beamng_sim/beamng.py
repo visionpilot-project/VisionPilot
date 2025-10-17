@@ -305,7 +305,7 @@ def main():
 
     pid = PIDController(Kp=0.14, Ki=0.0, Kd=0.17)
 
-    base_throttle = 0.02
+    base_throttle = 0.06
 
     steering_bias = 0
     max_steering_change = 0.15

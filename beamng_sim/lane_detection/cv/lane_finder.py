@@ -15,6 +15,12 @@ def get_histogram(binary_warped):
 
 
 def sliding_window_search(binary_warped, histogram):
+    # Additional filtering state
+    if not hasattr(sliding_window_search, 'last_lane_center'):
+        sliding_window_search.last_lane_center = None
+    if not hasattr(sliding_window_search, 'last_lane_width'):
+        sliding_window_search.last_lane_width = None
+
     """
     Perform sliding window search to find lane lines in a binary warped image.
     Args:
@@ -95,83 +101,63 @@ def sliding_window_search(binary_warped, histogram):
     rightx = nonzerox[right_lane_inds]
     righty = nonzeroy[right_lane_inds] 
 
-    if not hasattr(sliding_window_search, 'left_lane_pos_history'):
-        sliding_window_search.left_lane_pos_history = []
-    if not hasattr(sliding_window_search, 'right_lane_pos_history'):
-        sliding_window_search.right_lane_pos_history = []
+    if not hasattr(sliding_window_search, 'last_valid_lanes'):
+        sliding_window_search.last_valid_lanes = None
 
-    if len(leftx) > 0:
-        current_left_pos = np.median(leftx)
-        sliding_window_search.left_lane_pos_history.append(current_left_pos)
-        if len(sliding_window_search.left_lane_pos_history) > 30:
-            sliding_window_search.left_lane_pos_history.pop(0)
-        avg_left_pos = np.mean(sliding_window_search.left_lane_pos_history)
-        if abs(current_left_pos - avg_left_pos) > 120:
-            print(f"Left lane jump too far from history: {current_left_pos} vs avg {avg_left_pos:.1f}, ignoring")
-            leftx = np.array([])
-            lefty = np.array([])
+    lane_width_check = None
+    if len(leftx) > 0 and len(rightx) > 0:
+        ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0])
+        left_fit = np.polyfit(lefty, leftx, 2)
+        right_fit = np.polyfit(righty, rightx, 2)
+        left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
+        right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
+        lane_width_check = abs(right_fitx[-1] - left_fitx[-1])
+    else:
+        ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0])
+        left_fitx = np.full_like(ploty, binary_warped.shape[1] // 4)
+        right_fitx = np.full_like(ploty, 3 * binary_warped.shape[1] // 4)
+        left_fit = np.array([0, 0, binary_warped.shape[1] // 4])
+        right_fit = np.array([0, 0, 3 * binary_warped.shape[1] // 4])
 
-    if len(rightx) > 0:
-        current_right_pos = np.median(rightx)
-        sliding_window_search.right_lane_pos_history.append(current_right_pos)
-        if len(sliding_window_search.right_lane_pos_history) > 30:
-            sliding_window_search.right_lane_pos_history.pop(0)
-        avg_right_pos = np.mean(sliding_window_search.right_lane_pos_history)
-        if abs(current_right_pos - avg_right_pos) > 120:
-            print(f"Right lane jump too far from history: {current_right_pos} vs avg {avg_right_pos:.1f}, ignoring")
-            rightx = np.array([])
-            righty = np.array([])
-    if not hasattr(sliding_window_search, 'left_points_history'):
-        sliding_window_search.left_points_history = []
-        sliding_window_search.right_points_history = []
-
-    sliding_window_search.left_points_history.append(len(leftx))
-    sliding_window_search.right_points_history.append(len(rightx))
-
-    if len(sliding_window_search.left_points_history) > 30:
-        sliding_window_search.left_points_history.pop(0)
-    if len(sliding_window_search.right_points_history) > 30:
-        sliding_window_search.right_points_history.pop(0)
-
-    avg_left_points = np.mean(sliding_window_search.left_points_history) if sliding_window_search.left_points_history else 0
-    avg_right_points = np.mean(sliding_window_search.right_points_history) if sliding_window_search.right_points_history else 0
-
-    if avg_left_points > 0 and len(leftx) > avg_left_points * 1.7:
-        print(f"Ignoring left lane: {len(leftx)} points vs avg {avg_left_points:.1f}")
-        leftx = np.array([])
-        lefty = np.array([])
-    if avg_right_points > 0 and len(rightx) > avg_right_points * 1.7:
-        print(f"Ignoring right lane: {len(rightx)} points vs avg {avg_right_points:.1f}")
-        rightx = np.array([])
-        righty = np.array([])
-        
-    if not hasattr(sliding_window_search, 'grace_counter'):
-        sliding_window_search.grace_counter = 0
-        sliding_window_search.last_valid = None
-
-    if len(leftx) < 50 or len(rightx) < 50:
-        print(f"Insufficient lane pixels: left={len(leftx)}, right={len(rightx)}")
-        if sliding_window_search.last_valid is not None and sliding_window_search.grace_counter < 8:
-            print(f"Using last valid lane positions (grace {sliding_window_search.grace_counter}/8)")
-            sliding_window_search.grace_counter += 1
-            ploty, left_fit, right_fit, left_fitx, right_fitx = sliding_window_search.last_valid
+    use_history = False
+    if sliding_window_search.last_valid_lanes is not None:
+        if len(left_fitx) < 50 or len(right_fitx) < 50:
+            use_history = True
+        # Strict impossible lane width check
+        elif lane_width_check and lane_width_check > 170:
+            use_history = True
+            print(f"Lane width impossible ({lane_width_check:.1f}), using history")
+        elif lane_width_check and (lane_width_check < 100 or lane_width_check > 700):
+            use_history = True
+            print(f"Lane width unreasonable ({lane_width_check:.1f}), using history")
+        elif left_fitx[-1] >= right_fitx[-1]:
+            use_history = True
+            print(f"Lane crossing detected (left={left_fitx[-1]:.1f}, right={right_fitx[-1]:.1f}), using history")
         else:
-            ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0])
-            left_fitx = np.full_like(ploty, binary_warped.shape[1] // 4)
-            right_fitx = np.full_like(ploty, 3 * binary_warped.shape[1] // 4)
-            left_fit = np.array([0, 0, binary_warped.shape[1] // 4])
-            right_fit = np.array([0, 0, 3 * binary_warped.shape[1] // 4])
-            sliding_window_search.grace_counter = 0
-            sliding_window_search.last_valid = None
-        return ploty, left_fit, right_fit, left_fitx, right_fitx
+            lane_center = (left_fitx[-1] + right_fitx[-1]) / 2.0
+            if sliding_window_search.last_lane_center is not None:
+                if abs(lane_center - sliding_window_search.last_lane_center) > 50:
+                    use_history = True
+                    print(f"Sudden lane center jump ({lane_center:.1f} vs {sliding_window_search.last_lane_center:.1f}), using history")
 
-    sliding_window_search.grace_counter = 0
-    ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0])
-    left_fit = np.polyfit(lefty, leftx, 2)
-    right_fit = np.polyfit(righty, rightx, 2)
-    left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
-    right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
-    sliding_window_search.last_valid = (ploty, left_fit, right_fit, left_fitx, right_fitx)
+            if (lane_width_check is not None and sliding_window_search.last_lane_width is not None):
+                if abs(lane_width_check - sliding_window_search.last_lane_width) > 0.3 * sliding_window_search.last_lane_width:
+                    use_history = True
+                    print(f"Lane width changed too much ({lane_width_check:.1f} vs {sliding_window_search.last_lane_width:.1f}), using history")
+
+            if (np.any(np.isnan(left_fitx)) or np.any(np.isnan(right_fitx)) or
+                np.any(np.isinf(left_fitx)) or np.any(np.isinf(right_fitx))):
+                use_history = True
+                print("NaN or Inf detected in lane fit, using history")
+
+    if use_history:
+        ploty, left_fit, right_fit, left_fitx, right_fitx = sliding_window_search.last_valid_lanes
+        print("Using last valid lane detection")
+    else:
+        if len(left_fitx) > 50 and len(right_fitx) > 50 and lane_width_check and 100 < lane_width_check < 700:
+            sliding_window_search.last_valid_lanes = (ploty, left_fit, right_fit, left_fitx, right_fitx)
+            sliding_window_search.last_lane_center = (left_fitx[-1] + right_fitx[-1]) / 2.0
+            sliding_window_search.last_lane_width = lane_width_check
 
     try:
         left_fit = np.polyfit(lefty, leftx, 2)

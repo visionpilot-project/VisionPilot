@@ -17,6 +17,7 @@ import cv2
 
 
 def process_frame_cv(img, speed=0, previous_steering=0, debug_display=False, perspective_debug_display=False):
+        
     previous_fit = None
     confidence = 0.0
     try:
@@ -65,13 +66,19 @@ def process_frame_cv(img, speed=0, previous_steering=0, debug_display=False, per
 
         previous_fit = current_fit
 
-        if metrics_result == (None, None, None, None, None, None):
+        if metrics_result is None or (isinstance(metrics_result, tuple) and all(x is None for x in metrics_result)):
             left_curverad, right_curverad, deviation, lane_center, vehicle_center, lane_width = None, None, None, None, None, None
             smoothed_deviation = 0.0
             effective_deviation = 0.0
             print("Lane detection metrics calculation returned None values")
         else:
-            left_curverad, right_curverad, deviation, lane_center, vehicle_center, lane_width = metrics_result
+            if len(metrics_result) == 6:
+                left_curverad, right_curverad, deviation, lane_center, vehicle_center, lane_width = metrics_result
+            elif len(metrics_result) == 5:
+                left_curverad, right_curverad, deviation, lane_center, vehicle_center = metrics_result
+                lane_width = None
+            else:
+                left_curverad, right_curverad, deviation, lane_center, vehicle_center, lane_width = None, None, None, None, None, None
             smoothed_deviation, effective_deviation = process_deviation(deviation)
 
         result = draw_lane_overlay(img, binary_warped, Minv, left_fitx, right_fitx, ploty, deviation)
@@ -109,6 +116,7 @@ def process_frame_cv(img, speed=0, previous_steering=0, debug_display=False, per
         return result, metrics, confidence
     
 def process_frame_unet(img, model, speed=0, previous_steering=0, debug_display=False):
+        
     previous_fit = None
     confidence = 0.0
     try:
@@ -151,6 +159,7 @@ def process_frame_unet(img, model, speed=0, previous_steering=0, debug_display=F
 
         histogram = get_histogram(binary_warped)
         ploty, left_fit, right_fit, left_fitx, right_fitx = sliding_window_search(binary_warped, histogram)
+
 
         current_fit = (left_fit, right_fit)
         

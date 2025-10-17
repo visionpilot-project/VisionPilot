@@ -13,7 +13,7 @@ weights = {
     'num_lines': 0.2,
     'length': 0.2,
     'geometry': 0.4,
-    # 'unet_specific': 0.2
+    'temporal': 0.2  # Add temporal consistency weight
 }
 
 
@@ -88,7 +88,7 @@ def lane_geometry(left_fitx, right_fitx, ploty):
     """
 
     if left_fitx is None or right_fitx is None or len(left_fitx) == 0 or len(right_fitx) == 0:
-        return 0.3
+        return 0.0
     
     try:
         indices = [int(len(ploty)*0.9), int(len(ploty)*0.5), int(len(ploty)*0.1)]
@@ -101,7 +101,7 @@ def lane_geometry(left_fitx, right_fitx, ploty):
                     lane_widths.append(width)
         
         if len(lane_widths) == 0:
-            return 0.3
+            return 0.0
         
         reasonable_width_min = 100  # Minimum reasonable lane width in pixels
         reasonable_width_max = 700  # Maximum reasonable lane width in pixels
@@ -184,7 +184,8 @@ def compute_confidence_unet(left_fitx, right_fitx, ploty, current_fit=None, prev
     confidence = (
         weights['num_lines'] * shared_score['num_lines_score'] +
         weights['length'] * shared_score['length_continuity_score'] +
-        weights['geometry'] * shared_score['geometry_score']
+        weights['geometry'] * shared_score['geometry_score'] +
+        weights['temporal'] * shared_score['temporal_score']
         # weights['unet_specific'] * unet_specific_score
     ) / sum(weights.values())
 
@@ -200,7 +201,8 @@ def compute_confidence_cv(left_fitx, right_fitx, ploty, current_fit=None, previo
     confidence = (
         weights['num_lines'] * shared_score['num_lines_score'] +
         weights['length'] * shared_score['length_continuity_score'] +
-        weights['geometry'] * shared_score['geometry_score']
+        weights['geometry'] * shared_score['geometry_score'] +
+        weights['temporal'] * shared_score['temporal_score']
         # weights['cv_specific'] * cv_specific_score
     ) / sum(weights.values())
     
