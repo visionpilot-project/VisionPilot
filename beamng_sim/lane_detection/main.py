@@ -1,7 +1,7 @@
 import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from beamng_sim.lane_detection.cv.thresholding import apply_thresholds
+from beamng_sim.lane_detection.cv.thresholding import apply_thresholds_with_voting
 from beamng_sim.lane_detection.perspective import debug_perspective_live, get_src_points, perspective_warp
 from beamng_sim.lane_detection.cv.lane_finder import get_histogram, sliding_window_search
 from beamng_sim.lane_detection.metrics import calculate_curvature_and_deviation, process_deviation
@@ -24,7 +24,12 @@ def process_frame_cv(img, speed=0, previous_steering=0, debug_display=False, per
 
         src_points = get_src_points(img.shape, speed, previous_steering)
 
-        binary_image, avg_brightness = apply_thresholds(img, src_points=src_points, debug_display=debug_display)
+        binary_image, avg_brightness = apply_thresholds_with_voting(
+            img, 
+            src_points=src_points, 
+            debug_display=debug_display,
+            use_gradient=True  # Include gradient features
+        )
         if debug_display:
             cv2.imshow('1. Binary Image CV', binary_image*255 if binary_image.max()<=1 else binary_image)
             cv2.waitKey(1)

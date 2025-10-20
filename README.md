@@ -221,7 +221,7 @@ self-driving-car-simulation/
 **Future / Stretch Goals**
 - [ ] Docker containarization
 - [ ] Blindspot Monitoring
-- [ ] SLAM
+- [ ] SLAM (simultaneous localization and mapping)
 - [ ] GPS/IMU sensor
 - [ ] Map Matching algorithm
 - [ ] Global and Local path planning
