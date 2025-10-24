@@ -302,6 +302,23 @@ def vehicle_obstacle_detection(img):
 #     lidar_detections, lidar_obj_img = lidar_process_object_frame(lidar_data)
 #     return lidar_detections, lidar_obj_img
 
+
+def cruise_control(target_speed_kph, current_speed_kph, speed_pid, dt):
+    """
+    Simple cruise control to maintain target speed using PID controller.
+    Args:
+        target_speed_kph (float): Desired speed in kph
+        current_speed_kph (float): Current speed in kph
+        speed_pid (PIDController): PID controller instance for speed
+        dt (float): Time delta in seconds
+    Returns:
+        float: Throttle value between 0.0 and 1.0
+    """
+    speed_error = target_speed_kph - current_speed_kph
+    throttle = speed_pid.update(speed_error, dt)
+    throttle = np.clip(throttle, 0.0, 1.0)
+    return throttle
+
 def main():
     """
     Main function to run the simulation.
@@ -341,12 +358,14 @@ def main():
 
     debug_window = LiveLidarDebugWindow2D()
 
-    pid = PIDController(Kp=0.025, Ki=0.0, Kd=0.02, derivative_filter_alpha=0.2)
-
-    base_throttle = 0.12
-
+    steering_pid = PIDController(Kp=0.025, Ki=0.0, Kd=0.02, derivative_filter_alpha=0.2)
     max_steering_change = 0.22
     previous_steering = 0.0
+
+
+    base_throttle = 0.12
+    target_speed_kph = 50
+    speed_pid = PIDController(Kp=0.1, Ki=0.01, Kd=0.05)
 
     frame_count = 0
 
@@ -387,7 +406,7 @@ def main():
 
             # Lane Detection
             result, steering, throttle, deviation, lane_center, vehicle_center = lane_detection_fused(
-                img, speed_kph, pid, previous_steering, base_throttle, max_steering_change, step_i=step_i
+                img, speed_kph, steering_pid, previous_steering, base_throttle, max_steering_change, step_i=step_i
             )
 
             # Log to CSV
@@ -419,6 +438,8 @@ def main():
             # Lidar Object Detection
             # lidar_detections, lidar_obj_img = lidar_object_detections(lidar, camera_detections=vehicle_detections)
 
+            throttle = cruise_control(target_speed_kph, speed_kph, speed_pid, dt)
+            
             # Steering, throttle, brake inputs
             previous_steering = steering
             vehicle.control(steering=steering, throttle=throttle, brake=0.0)
