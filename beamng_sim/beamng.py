@@ -228,7 +228,7 @@ def lane_detection_fused(img, speed_kph, pid, previous_steering, base_throttle, 
 
     cv_result, cv_metrics, cv_conf = lane_detection_cv_process_frame(
         img, speed=speed_kph, previous_steering=previous_steering, 
-        debug_display=True, perspective_debug_display=True,
+        debug_display=False, perspective_debug_display=False,
         calibration_data=CAMERA_CALIBRATION
     )
 
@@ -341,12 +341,11 @@ def main():
 
     debug_window = LiveLidarDebugWindow2D()
 
-    # PID with derivative filtering to prevent sudden "bullet" steering
-    pid = PIDController(Kp=0.015, Ki=0.0, Kd=0.025, derivative_filter_alpha=0.3)
+    pid = PIDController(Kp=0.025, Ki=0.0, Kd=0.02, derivative_filter_alpha=0.2)
 
-    base_throttle = 0.2
+    base_throttle = 0.12
 
-    max_steering_change = 0.15
+    max_steering_change = 0.22
     previous_steering = 0.0
 
     frame_count = 0

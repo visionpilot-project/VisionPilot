@@ -24,7 +24,7 @@ def smooth_deviation(raw_deviation, alpha=0.65):
     return smooth_deviation.smoothed_deviation
 
 
-def apply_deviation_deadzone_and_scaling(smoothed_deviation, dead_zone=0.1, max_dev=2.0):
+def apply_deviation_deadzone_and_scaling(smoothed_deviation, dead_zone=0.1, max_dev=1.5):
     """
     Apply deadzone and scaling to smoothed deviation for control purposes.
     
@@ -215,14 +215,14 @@ def calculate_curvature_and_deviation(ploty, left_fitx, right_fitx, binary_warpe
         return None, None, None, None, None, None
 
 
-def process_deviation(raw_deviation, alpha=0.55, dead_zone=0.1, max_dev=2.0):
+def process_deviation(raw_deviation, alpha=0.52, dead_zone=0.1, max_dev=2.0):
     """
     Process raw deviation for use in control systems.
     Applies smoothing, deadzone, and scaling.
     
     Args:
         raw_deviation: Raw deviation value from lane detection
-        alpha: Smoothing factor for exponential smoothing
+        alpha: Smoothing factor for exponential smoothing (lower = more smoothing)
         dead_zone: Minimum deviation threshold
         max_dev: Maximum deviation for scaling
         
