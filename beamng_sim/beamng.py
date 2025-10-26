@@ -31,8 +31,6 @@ from beamng_sim.radar.main import process_frame as radar_process_frame
 from beamng_sim.lane_detection.fusion import fuse_lane_metrics
 from beamng_sim.lane_detection.perspective import load_calibration
 
-from beamng_sim.lidar.lidar_live_debug import LiveLidarDebugWindow2D
-
 MODELS = {}
 
 def yaw_to_quat(yaw_deg):
@@ -175,6 +173,7 @@ def sim_setup():
         lidar = None
     
     # try:
+    #     print("Attempting Radar initialization...")
     #     radar = Radar(
     #         "radar1",
     #         beamng,
@@ -190,10 +189,10 @@ def sim_setup():
     #     )
     #     print("Radar initialized")
     # except Exception as e:
-    #     print(f"Radar initialization error: {e}")
+    #     print(f"❌ Radar initialization error: {e}")
     #     radar = None
 
-    return beamng, scenario, vehicle, camera, lidar, # radar
+    return beamng, scenario, vehicle, camera, lidar, #radar
 
 def get_vehicle_speed(vehicle):
     """
@@ -328,7 +327,7 @@ def main():
     except Exception as e:
         print(f"Model loading error: {e}")
         return
-    
+
     beamng, scenario, vehicle, camera, lidar = sim_setup()
     print("Simulation setup complete")
 
@@ -356,8 +355,6 @@ def main():
     # except Exception as e:
     #     print(f"Radar error: {e}")
 
-    debug_window = LiveLidarDebugWindow2D()
-
     steering_pid = PIDController(Kp=0.025, Ki=0.0, Kd=0.02, derivative_filter_alpha=0.2)
     max_steering_change = 0.22
     previous_steering = 0.0
@@ -365,7 +362,7 @@ def main():
 
     base_throttle = 0.12
     target_speed_kph = 50
-    speed_pid = PIDController(Kp=0.1, Ki=0.01, Kd=0.05)
+    speed_pid = PIDController(Kp=0.025, Ki=0.0, Kd=0.02)
 
     frame_count = 0
 
@@ -433,7 +430,10 @@ def main():
             # radar_detections = radar_process_frame(radar_sensor=radar, camera_detections=vehicle_detections, speed=speed_kph)
 
             # Lidar Road Boundaries
-            lidar_lane_boundaries = lidar_process_frame(lidar, beamng=beamng, speed=speed_kph, debug_window=debug_window)
+            try:
+                lidar_lane_boundaries = lidar_process_frame(lidar, beamng=beamng, speed=speed_kph, debug_window=None, vehicle=vehicle)
+            except Exception as lidar_e:
+                print(f"❌ Lidar process error: {lidar_e}")
 
             # Lidar Object Detection
             # lidar_detections, lidar_obj_img = lidar_object_detections(lidar, camera_detections=vehicle_detections)
@@ -456,7 +456,6 @@ def main():
         log_file.close()
         cv2.destroyAllWindows()
         beamng.close()
-        debug_window.close()
 
 if __name__ == "__main__":
     main()
