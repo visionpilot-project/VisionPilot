@@ -157,12 +157,12 @@ def sim_setup():
             vehicle,
             requested_update_time=0.01,
             is_using_shared_memory=True,
-            is_360_mode=False,
-            horizontal_angle=120,  # Horizontal field of view
+            is_rotate_mode=False,
+            horizontal_angle=170,  # Horizontal field of view
             vertical_angle=30,  # Vertical field of view
-            vertical_resolution=50,  # Number of lasers/channels
-            density=10,
-            frequency=20,
+            vertical_resolution=64,  # Number of lasers/channels
+            density=7,
+            frequency=15,
             max_distance=100,
             pos=(0, -0.35, 1.425),
             is_visualised=False,
@@ -196,11 +196,11 @@ def sim_setup():
 
 def get_vehicle_speed(vehicle):
     """
-    Get the vehicle speed in m/s and kph.
+    Get the vehicle speed in m/s and kph, and also return position.
     Args:
         vehicle (Vehicle): BeamNG vehicle object
     Returns:
-        tuple: (speed_mps, speed_kph)
+        tuple: (speed_mps, speed_kph, position)
     """
 
     vehicle.poll_sensors()
@@ -211,7 +211,18 @@ def get_vehicle_speed(vehicle):
         speed_mps = 0.0
         speed_kph = 0.0
 
-    return speed_mps, speed_kph
+    if 'pos' in vehicle.state:
+        position = vehicle.state['pos']
+        print(f"Vehicle position: x={position[0]:.2f}, y={position[1]:.2f}, z={position[2]:.2f}")
+    else:
+        print("Vehicle position not available")
+        position = None
+
+    if 'dir' in vehicle.state:
+        direction = vehicle.state['dir']
+        print(f"Vehicle direction: x={direction[0]:.2f}, y={direction[1]:.2f}, z={direction[2]:.2f}")
+
+    return speed_mps, speed_kph, position, direction
 
 
 def lane_detection_fused(img, speed_kph, pid, previous_steering, base_throttle, max_steering_change, step_i):
@@ -355,14 +366,14 @@ def main():
     # except Exception as e:
     #     print(f"Radar error: {e}")
 
-    steering_pid = PIDController(Kp=0.025, Ki=0.0, Kd=0.02, derivative_filter_alpha=0.2)
+    steering_pid = PIDController(Kp=0.017, Ki=0.0, Kd=0.004, derivative_filter_alpha=0.2)
     max_steering_change = 0.22
     previous_steering = 0.0
 
 
     base_throttle = 0.12
-    target_speed_kph = 50
-    speed_pid = PIDController(Kp=0.025, Ki=0.0, Kd=0.02)
+    target_speed_kph = 40
+    speed_pid = PIDController(Kp=0.02, Ki=0.0, Kd=0.01)
 
     frame_count = 0
 
@@ -394,7 +405,7 @@ def main():
 
             # Speed
             try:
-                speed_mps, speed_kph = get_vehicle_speed(vehicle)
+                speed_mps, speed_kph, car_pos, direction = get_vehicle_speed(vehicle)
                 speed_mps = abs(speed_mps)
                 speed_kph = abs(speed_kph)
             except Exception as e:
@@ -431,9 +442,9 @@ def main():
 
             # Lidar Road Boundaries
             try:
-                lidar_lane_boundaries = lidar_process_frame(lidar, beamng=beamng, speed=speed_kph, debug_window=None, vehicle=vehicle)
+                lidar_lane_boundaries = lidar_process_frame(lidar, beamng=beamng, speed=speed_kph, debug_window=None, vehicle=vehicle, car_position=car_pos, car_direction=direction)
             except Exception as lidar_e:
-                print(f"❌ Lidar process error: {lidar_e}")
+                print(f"Lidar process error: {lidar_e}")
 
             # Lidar Object Detection
             # lidar_detections, lidar_obj_img = lidar_object_detections(lidar, camera_detections=vehicle_detections)

@@ -13,20 +13,7 @@ def collect_lidar_data(beamng, lidar_data):
         print("LiDAR data is None")
         return []
     
-    print(f"LiDAR data type: {type(lidar_data)}")
-    print(f"LiDAR data keys: {lidar_data.keys() if isinstance(lidar_data, dict) else 'Not a dict'}")
-    
     readings_data = lidar_data
-    
-    if isinstance(readings_data, dict):
-        for key in readings_data.keys():
-            val = readings_data[key]
-            if isinstance(val, list):
-                print(f"  - {key}: list with {len(val)} items")
-            elif isinstance(val, np.ndarray):
-                print(f"  - {key}: numpy array with shape {val.shape}")
-            else:
-                print(f"  - {key}: {type(val)}")
     
     point_cloud = readings_data.get("pointCloud", [])
     

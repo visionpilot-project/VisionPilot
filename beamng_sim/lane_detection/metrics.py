@@ -193,14 +193,6 @@ def calculate_curvature_and_deviation(ploty, left_fitx, right_fitx, binary_warpe
         
         deviation_pixels = vehicle_center - lane_center
         deviation_m = deviation_pixels * xm_per_pix
-        
-        print(f"Deviation Calculation Debug:")
-        print(f"  Binary warped shape: {binary_warped.shape}")
-        print(f"  Original image width: {original_image_width if original_image_width else 'NOT PROVIDED (using warped width)'}")
-        print(f"  Left bottom: {left_bottom:.1f}, Right bottom: {right_bottom:.1f}")
-        print(f"  Lane center: {lane_center:.1f}, Vehicle center: {vehicle_center:.1f}")
-        print(f"  Deviation (pixels): {deviation_pixels:.1f}")
-        print(f"  xm_per_pix: {xm_per_pix:.4f}, Deviation (m): {deviation_m:.4f}")
 
         # Limit unreasonable deviation values
         max_reasonable_deviation = 0.7
