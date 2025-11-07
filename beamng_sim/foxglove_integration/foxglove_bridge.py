@@ -1,6 +1,6 @@
 import foxglove
 from foxglove import Channel
-from foxglove.channels import SceneUpdateChannel
+from foxglove.channels import SceneUpdateChannel, PointCloudChannel
 from foxglove.schemas import (
     Color,
     CubePrimitive,
@@ -9,9 +9,14 @@ from foxglove.schemas import (
     Vector3,
     ModelPrimitive,
     Pose,
+    Timestamp,
+    PointCloud,
+    PackedElementField,
+    PackedElementFieldNumericType,
 )
 import numpy as np
 import os
+import time
 
 
 class FoxgloveBridge:
@@ -24,8 +29,9 @@ class FoxgloveBridge:
         self.lane_channel = None
         self.vehicle_channel = None
         self.vehicle_state_channel = None
-        # PointCloud channel
+        # PointCloud channel (native Foxglove schema)
         self.lidar_channel = None
+        self.scene_channel = None
     
     def start_server(self):
         """Start the Foxglove WebSocket server"""
@@ -51,7 +57,11 @@ class FoxgloveBridge:
         self.lane_channel = Channel("/detections/lane", message_encoding="json")
         self.vehicle_channel = Channel("/detections/vehicle", message_encoding="json")
         self.vehicle_state_channel = Channel("/vehicle/state", message_encoding="json")
-        self.lidar_channel = Channel("/lidar/points", message_encoding="json")
+        
+        # PointCloud channel (native Foxglove schema)
+        self.lidar_channel = PointCloudChannel(topic="/lidar/pointcloud")
+        
+        # Scene channel for 3D models
         self.scene_channel = SceneUpdateChannel("/scene")
         
         self._initialized = True
@@ -149,6 +159,11 @@ class FoxgloveBridge:
             print(f"[FoxgloveBridge] Error sending vehicle state: {e}")
     
     def send_lidar(self, points):
+        """
+        Send LiDAR point cloud data using native Foxglove PointCloud schema.
+        Args:
+            points: numpy array or list of points with shape (N, 3) containing x, y, z coordinates
+        """
         if not self._initialized:
             print("[FoxgloveBridge] Warning: Bridge not initialized, skipping LiDAR")
             return
@@ -156,23 +171,43 @@ class FoxgloveBridge:
         if points is None or len(points) == 0:
             print("[FoxgloveBridge] No LiDAR points to send.")
             return
+        
         try:
+            # Convert to float32 numpy array
             points_array = np.asarray(points, dtype=np.float32)
             
-            # Convert to list of dicts for JSON serialization
-            points_data = [
-                {"x": float(p[0]), "y": float(p[1]), "z": float(p[2])}
-                for p in points_array
+            # Ensure shape is (N, 3)
+            if len(points_array.shape) == 1:
+                points_array = points_array.reshape(-1, 3)
+            
+            # Define PointCloud fields (x, y, z)
+            f32 = PackedElementFieldNumericType.Float32
+            fields = [
+                PackedElementField(name="x", offset=0, type=f32),
+                PackedElementField(name="y", offset=4, type=f32),
+                PackedElementField(name="z", offset=8, type=f32),
             ]
             
-            message = {
-                "points": points_data,
-                "count": len(points_data)
-            }
+            # Flatten to bytes
+            data_bytes = points_array.tobytes()
             
-            print(f"[FoxgloveBridge] Sending LiDAR: {len(points_data)} points to /lidar/points")
-            print(f"[FoxgloveBridge] Sample point: {points_data[0] if points_data else 'N/A'}")
-            self.lidar_channel.log(message)
+            # Create timestamp
+            stamp = int(time.time() * 1e9)
+            timestamp = Timestamp(sec=int(stamp // 1e9), nsec=int(stamp % 1e9))
+            
+            # Create PointCloud message
+            pc = PointCloud(
+                timestamp=timestamp,
+                frame_id="base_link",
+                point_stride=12,  # 3 fields * 4 bytes each
+                fields=fields,
+                data=data_bytes,
+            )
+            
+            # Send to Foxglove
+            self.lidar_channel.log(pc, log_time=stamp)
+            print(f"[FoxgloveBridge] Sent {len(points_array)} LiDAR points to /lidar/pointcloud")
+            
         except Exception as e:
             print(f"[FoxgloveBridge] Error sending LiDAR: {e}")
     
