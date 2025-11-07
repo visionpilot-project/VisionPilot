@@ -260,19 +260,13 @@ class FoxgloveBridge:
             for wheel_id, rel_x, rel_y, rel_z, mesh_file in wheels:
                 glb_path = os.path.join(model_dir, mesh_file)
                 if os.path.exists(glb_path):
-                    # Transform wheel position to world coordinates
-                    cos_yaw = np.cos(yaw)
-                    sin_yaw = np.sin(yaw)
-                    world_x = x + (rel_x * cos_yaw - rel_y * sin_yaw)
-                    world_y = y + (rel_x * sin_yaw + rel_y * cos_yaw)
-                    world_z = z + rel_z
-                    
+                    # Wheel position relative to car body (no need to transform)
                     wheel_entity = SceneEntity(
                         id=wheel_id,
-                        frame_id="world",
+                        frame_id="bmw_body",  # Position relative to body frame
                         pose=Pose(
-                            position=Vector3(x=float(world_x), y=float(world_y), z=float(world_z)),
-                            orientation={"x": float(qx), "y": float(qy), "z": float(qz), "w": float(qw)},
+                            position=Vector3(x=float(rel_x), y=float(rel_y), z=float(rel_z)),
+                            orientation={"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
                         ),
                         model=ModelPrimitive(url=f"file://{glb_path}"),
                     )
