@@ -409,12 +409,22 @@ def main():
                 speed_kph = abs(speed_kph)
             except Exception as e:
                 print(f"Speed retrieval error: {e}")
-                break
+                continue
 
             # Lane Detection
+<<<<<<< Updated upstream
             result, steering, throttle, deviation, lane_center, vehicle_center, fused_metrics = lane_detection_fused(
                 img, speed_kph, steering_pid, previous_steering, base_throttle, max_steering_change, step_i=step_i
             )
+=======
+            try:
+                result, steering, throttle, deviation, lane_center, vehicle_center = lane_detection_fused(
+                    img, speed_kph, steering_pid, previous_steering, base_throttle, max_steering_change, step_i=step_i
+                )
+            except Exception as lane_e:
+                print(f"Lane detection error: {lane_e}")
+                continue
+>>>>>>> Stashed changes
 
             # Log to CSV
             fused_confidence = fused_metrics.get('confidence', 0.0)
@@ -430,6 +440,7 @@ def main():
 
 
             if step_i % 80 == 0: # Lower later
+<<<<<<< Updated upstream
                 # Sign Detection
                 sign_detections, sign_img = sign_detection_classification(img)
                 cv2.imshow('Sign Detection', sign_img)
@@ -438,6 +449,23 @@ def main():
                 # Vehicle & Obstacle Detection
                 vehicle_detections, vehicle_img = vehicle_obstacle_detection(img)
                 cv2.imshow('Vehicle and Pedestrian Detection', vehicle_img)
+=======
+                try:
+                    # Sign Detection
+                    sign_detections, sign_img = sign_detection_classification(img)
+                    cv2.imshow('Sign Detection', sign_img)
+                except Exception as sign_e:
+                    print(f"Sign detection error: {sign_e}")
+                    continue
+                
+                try:
+                    # Vehicle & Obstacle Detection
+                    vehicle_detections, vehicle_img = vehicle_obstacle_detection(img)
+                    cv2.imshow('Vehicle and Pedestrian Detection', vehicle_img)
+                except Exception as vehicle_e:
+                    print(f"Vehicle detection error: {vehicle_e}")
+                    continue
+>>>>>>> Stashed changes
 
             # radar_detections = radar_process_frame(radar_sensor=radar, camera_detections=vehicle_detections, speed=speed_kph)
 
