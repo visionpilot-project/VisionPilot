@@ -1,8 +1,21 @@
 import foxglove
 import time
+from .bridge_instance import bridge
 
 foxglove.set_log_level("INFO")
 foxglove.start_server()
+
+# Initialize channels after server is started
+bridge.initialize_channels()
+
+print("Foxglove WebSocket server running on ws://localhost:8765")
+print("Channels registered:")
+print("  - /detections/sign")
+print("  - /detections/traffic_light")
+print("  - /detections/lane")
+print("  - /detections/vehicle")
+print("  - /vehicle/state")
+print("  - /lidar/points")
 
 try:
     while True:

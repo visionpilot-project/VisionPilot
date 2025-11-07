@@ -1,11 +1,17 @@
 import foxglove
 from foxglove import Channel
-from foxglove.channels import PointCloudChannel
-from foxglove.schemas import Timestamp, PointCloud, PackedElementField, PackedElementFieldNumericType
+from foxglove.channels import SceneUpdateChannel
+from foxglove.schemas import (
+    Color,
+    CubePrimitive,
+    SceneEntity,
+    SceneUpdate,
+    Vector3,
+    ModelPrimitive,
+    Pose,
+)
 import numpy as np
-import time
-
-f32 = PackedElementFieldNumericType.Float32
+import os
 
 
 class FoxgloveBridge:
@@ -37,9 +43,6 @@ class FoxgloveBridge:
         if self._initialized:
             return
         
-        if not self._server_started:
-            self.start_server()
-        
         print("[FoxgloveBridge] Initializing channels...")
         
         # JSON channels
@@ -48,18 +51,11 @@ class FoxgloveBridge:
         self.lane_channel = Channel("/detections/lane", message_encoding="json")
         self.vehicle_channel = Channel("/detections/vehicle", message_encoding="json")
         self.vehicle_state_channel = Channel("/vehicle/state", message_encoding="json")
-        
-        # PointCloud channel for LiDAR visualization
-        self.lidar_channel = PointCloudChannel(topic="/lidar/points")
+        self.lidar_channel = Channel("/lidar/points", message_encoding="json")
+        self.scene_channel = SceneUpdateChannel("/scene")
         
         self._initialized = True
-        print("[FoxgloveBridge] All channels initialized successfully")
-        print("  - /detections/sign")
-        print("  - /detections/traffic_light")
-        print("  - /detections/lane")
-        print("  - /detections/vehicle")
-        print("  - /vehicle/state")
-        print("  - /lidar/points (PointCloud)")
+        print("[FoxgloveBridge] Channels initialized successfully")
     
     def send_sign_detection(self, sign_type, x, y, confidence):
         if not self._initialized:
@@ -162,33 +158,97 @@ class FoxgloveBridge:
             return
         try:
             points_array = np.asarray(points, dtype=np.float32)
-            # Limit to avoid overwhelming the connection
-            if len(points_array) > 10000:
-                points_array = points_array[:10000]
             
-            # Create PointCloud message
-            # 3 floats per point (x, y, z)
-            data_bytes = points_array.tobytes()
-            
-            fields = [
-                PackedElementField(name="x", offset=0, type=f32),
-                PackedElementField(name="y", offset=4, type=f32),
-                PackedElementField(name="z", offset=8, type=f32),
+            # Convert to list of dicts for JSON serialization
+            points_data = [
+                {"x": float(p[0]), "y": float(p[1]), "z": float(p[2])}
+                for p in points_array
             ]
             
-            stamp = int(time.time() * 1e9)
-            timestamp = Timestamp(sec=int(stamp // 1e9), nsec=int(stamp % 1e9))
+            message = {
+                "points": points_data,
+                "count": len(points_data)
+            }
             
-            pc = PointCloud(
-                timestamp=timestamp,
-                frame_id="base_link",
-                point_stride=12,  # 3 * 4 bytes
-                fields=fields,
-                data=data_bytes,
-            )
-            
-            self.lidar_channel.log(pc, log_time=stamp)
-            print(f"[FoxgloveBridge] LiDAR sent: {len(points_array)} points")
+            print(f"[FoxgloveBridge] Sending LiDAR: {len(points_data)} points to /lidar/points")
+            print(f"[FoxgloveBridge] Sample point: {points_data[0] if points_data else 'N/A'}")
+            self.lidar_channel.log(message)
         except Exception as e:
             print(f"[FoxgloveBridge] Error sending LiDAR: {e}")
+    
+    def send_vehicle_3d(self, x, y, z, yaw=0.0):
+        """
+        Send vehicle position and orientation with BMW X5 GLB models.
+        
+        Args:
+            x, y, z: Vehicle position in world coordinates
+            yaw: Vehicle yaw angle in radians (rotation around Z axis)
+        """
+        try:
+            # Convert yaw to quaternion (rotation around Z axis)
+            half_yaw = yaw / 2.0
+            qx = 0.0
+            qy = 0.0
+            qz = np.sin(half_yaw)
+            qw = np.cos(half_yaw)
+            
+            entities = []
+            
+            # Base directory for GLB files
+            model_dir = os.path.join(
+                os.path.dirname(__file__),
+                "model", "bmw_x5", "meshes"
+            )
+            
+            # Car body
+            body_glb_path = os.path.join(model_dir, "car_body.glb")
+            if os.path.exists(body_glb_path):
+                body_entity = SceneEntity(
+                    id="bmw_body",
+                    frame_id="world",
+                    pose=Pose(
+                        position=Vector3(x=float(x), y=float(y), z=float(z)),
+                        orientation={"x": float(qx), "y": float(qy), "z": float(qz), "w": float(qw)},
+                    ),
+                    model=ModelPrimitive(url=f"file://{body_glb_path}"),
+                )
+                entities.append(body_entity)
+            
+            # Wheel positions from URDF (relative to body)
+            wheels = [
+                ("front_left_wheel", 1.3, 0.8, -0.3, "wheel_front_left.glb"),
+                ("front_right_wheel", 1.3, -0.8, -0.3, "wheel_front_right.glb"),
+                ("rear_left_wheel", -1.3, 0.8, -0.3, "wheel_rear_left.glb"),
+                ("rear_right_wheel", -1.3, -0.8, -0.3, "wheel_rear_right.glb"),
+            ]
+            
+            for wheel_id, rel_x, rel_y, rel_z, mesh_file in wheels:
+                glb_path = os.path.join(model_dir, mesh_file)
+                if os.path.exists(glb_path):
+                    # Transform wheel position to world coordinates
+                    cos_yaw = np.cos(yaw)
+                    sin_yaw = np.sin(yaw)
+                    world_x = x + (rel_x * cos_yaw - rel_y * sin_yaw)
+                    world_y = y + (rel_x * sin_yaw + rel_y * cos_yaw)
+                    world_z = z + rel_z
+                    
+                    wheel_entity = SceneEntity(
+                        id=wheel_id,
+                        frame_id="world",
+                        pose=Pose(
+                            position=Vector3(x=float(world_x), y=float(world_y), z=float(world_z)),
+                            orientation={"x": float(qx), "y": float(qy), "z": float(qz), "w": float(qw)},
+                        ),
+                        model=ModelPrimitive(url=f"file://{glb_path}"),
+                    )
+                    entities.append(wheel_entity)
+            
+            if entities:
+                scene_update = SceneUpdate(entities=entities)
+                print(f"[FoxgloveBridge] Sending BMW X5 3D model at ({x:.1f}, {y:.1f}, {z:.1f}), yaw={np.degrees(yaw):.1f}°")
+                self.scene_channel.log(scene_update)
+            else:
+                print(f"[FoxgloveBridge] Warning: No GLB files found in {model_dir}")
+        except Exception as e:
+            print(f"[FoxgloveBridge] Error sending vehicle 3D: {e}")
     

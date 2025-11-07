@@ -515,6 +515,18 @@ def main():
                 print(f"Error sending vehicle state to Foxglove: {vehicle_state_send_e}")
 
             try:
+                # Send 3D vehicle model
+                car_yaw = np.arctan2(direction[1], direction[0])
+                bridge.send_vehicle_3d(
+                    x=car_pos[0],
+                    y=car_pos[1],
+                    z=car_pos[2],
+                    yaw=car_yaw
+                )
+            except Exception as vehicle_3d_send_e:
+                print(f"Error sending vehicle 3D model to Foxglove: {vehicle_3d_send_e}")
+
+            try:
                 if filtered_points is not None and len(filtered_points) > 0:
                     bridge.send_lidar(filtered_points)
             except Exception as lidar_send_e:

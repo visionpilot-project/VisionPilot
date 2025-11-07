@@ -1,0 +1,82 @@
+<robot name="bmw_x5">
+
+  <!-- Root joint: body attached to world -->
+  <joint name="body_root_joint" type="fixed">
+    <parent link="world"/>
+    <child link="body"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Car body -->
+  <link name="body">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/car_body.stl" scale="1 1 1"/>
+      </geometry>
+      <material name="car_paint">
+        <color rgba="0.1 0.1 0.8 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <!-- Front Left Wheel -->
+  <link name="front_left_wheel">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/wheel_front_left.stl" scale="1 1 1"/>
+      </geometry>
+    </visual>
+  </link>
+  <joint name="front_left_wheel_joint" type="revolute">
+    <parent link="body"/>
+    <child link="front_left_wheel"/>
+    <origin xyz="1.3 0.8 -0.3" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
+  <!-- Front Right Wheel -->
+  <link name="front_right_wheel">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/wheel_front_right.stl" scale="1 1 1"/>
+      </geometry>
+    </visual>
+  </link>
+  <joint name="front_right_wheel_joint" type="revolute">
+    <parent link="body"/>
+    <child link="front_right_wheel"/>
+    <origin xyz="1.3 -0.8 -0.3" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
+  <!-- Rear Left Wheel -->
+  <link name="rear_left_wheel">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/wheel_rear_left.stl" scale="1 1 1"/>
+      </geometry>
+    </visual>
+  </link>
+  <joint name="rear_left_wheel_joint" type="revolute">
+    <parent link="body"/>
+    <child link="rear_left_wheel"/>
+    <origin xyz="-1.3 0.8 -0.3" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
+  <!-- Rear Right Wheel -->
+  <link name="rear_right_wheel">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/wheel_rear_right.stl" scale="1 1 1"/>
+      </geometry>
+    </visual>
+  </link>
+  <joint name="rear_right_wheel_joint" type="revolute">
+    <parent link="body"/>
+    <child link="rear_right_wheel"/>
+    <origin xyz="-1.3 -0.8 -0.3" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
+</robot>
