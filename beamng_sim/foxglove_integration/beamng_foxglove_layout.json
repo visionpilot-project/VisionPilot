@@ -1,0 +1,253 @@
+{
+  "configById": {
+    "TransformTree!2ci8fiw": {},
+    "Image!2rxtsxe": {
+      "cameraState": {
+        "distance": 20,
+        "perspective": true,
+        "phi": 60,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "thetaOffset": 45,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {
+        "/vehicle_pose": {
+          "visible": false
+        },
+        "/scene": {
+          "visible": false
+        },
+        "/lidar": {
+          "visible": false
+        }
+      },
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {}
+    },
+    "3D!2r72dxj": {
+      "cameraState": {
+        "perspective": true,
+        "distance": 506.3407289130984,
+        "phi": 43.229524319038525,
+        "thetaOffset": 45.000000000004,
+        "targetOffset": [
+          399.53037068358145,
+          662.7511188093154,
+          -1.311603881503944e-15
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {
+        "backgroundColor": "#000000",
+        "enableStats": true,
+        "transforms": {
+          "editable": false
+        }
+      },
+      "transforms": {
+        "frame:lidar": {
+          "visible": true
+        }
+      },
+      "topics": {
+        "/lidar/pointcloud": {
+          "visible": true,
+          "colorMode": "colormap",
+          "colorField": "_auto_distance",
+          "gradient": [
+            "#2f3469ff",
+            "#ba2323ff"
+          ],
+          "decayTime": 186.938,
+          "pointSize": 1,
+          "colorMap": "rainbow",
+          "stixelsEnabled": false,
+          "explicitAlpha": 0.3
+        },
+        "/scene": {
+          "visible": true
+        },
+        "/lidar": {
+          "visible": true,
+          "colorField": "z",
+          "colorMode": "colormap",
+          "colorMap": "rainbow",
+          "decayTime": 300
+        },
+        "/vehicle_pose": {
+          "visible": true
+        }
+      },
+      "layers": {
+        "grid": {
+          "visible": true,
+          "drawBehind": false,
+          "frameLocked": true,
+          "label": "Grid",
+          "instanceId": "4c9ebda2-f1e2-4ee4-953e-7581fe6490b3",
+          "layerId": "foxglove.Grid",
+          "size": 10,
+          "divisions": 10,
+          "lineWidth": 1,
+          "color": "#248eff",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {},
+      "foxglovePanelTitle": "Lidar Point Cloud",
+      "followTf": "base_link"
+    },
+    "Gauge!188ysyz": {
+      "path": "/vehicle_control.speed_kph",
+      "minValue": 0,
+      "maxValue": 200,
+      "colorMap": "red-yellow-green",
+      "colorMode": "colormap",
+      "gradient": [
+        "#0000ff",
+        "#ff00ff"
+      ],
+      "reverse": true,
+      "reverseDirection": false,
+      "foxglovePanelTitle": "Speed"
+    },
+    "Plot!2feiye8": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/vehicle_control.steering",
+          "enabled": true,
+          "color": "#4e98e2"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": false,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240,
+      "yAxisLabel": "Steering ",
+      "xAxisLabel": "Time in S"
+    },
+    "RawMessages!2lezat8": {
+      "diffEnabled": false,
+      "diffMethod": "custom",
+      "diffTopicPath": "",
+      "showFullMessageForDiff": false,
+      "topicPath": "/vehicle_pose",
+      "fontSize": 12
+    },
+    "Gauge!2dng52m": {
+      "path": "/vehicle_control.throttle",
+      "minValue": 0,
+      "maxValue": 1,
+      "colorMap": "red-yellow-green",
+      "colorMode": "colormap",
+      "gradient": [
+        "#0000ff",
+        "#ff00ff"
+      ],
+      "reverse": false,
+      "reverseDirection": false,
+      "foxglovePanelTitle": "Throttle"
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": {
+    "direction": "row",
+    "first": {
+      "first": "TransformTree!2ci8fiw",
+      "second": "Image!2rxtsxe",
+      "direction": "column",
+      "splitPercentage": 40.60606060606061
+    },
+    "second": {
+      "direction": "row",
+      "first": {
+        "first": "3D!2r72dxj",
+        "second": "Gauge!188ysyz",
+        "direction": "column",
+        "splitPercentage": 74.01055408970977
+      },
+      "second": {
+        "first": {
+          "first": "Plot!2feiye8",
+          "second": "RawMessages!2lezat8",
+          "direction": "column",
+          "splitPercentage": 57.45554035567716
+        },
+        "second": "Gauge!2dng52m",
+        "direction": "column",
+        "splitPercentage": 73.83838383838383
+      }
+    },
+    "splitPercentage": 21.459769860098
+  }
+}

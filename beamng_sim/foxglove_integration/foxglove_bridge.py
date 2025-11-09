@@ -1,340 +1,559 @@
+"""
+Foxglove Bridge for BeamNG Simulation
+Handles all communication with Foxglove Studio via WebSocket
+"""
+
+import json
+import time
+import struct
+import numpy as np
+import cv2
+from pathlib import Path
 import foxglove
-from foxglove import Channel
-from foxglove.channels import SceneUpdateChannel, PointCloudChannel
+from foxglove import start_server, Channel
+from foxglove.channels import (
+    PosesInFrameChannel,
+    SceneUpdateChannel,
+    PointCloudChannel,
+    FrameTransformsChannel,
+    CompressedImageChannel,
+    LinePrimitiveChannel,
+)
 from foxglove.schemas import (
-    Color,
-    CubePrimitive,
-    SceneEntity,
-    SceneUpdate,
-    Vector3,
-    ModelPrimitive,
-    Pose,
     Timestamp,
     PointCloud,
     PackedElementField,
     PackedElementFieldNumericType,
+    PosesInFrame,
+    Pose,
     Quaternion,
+    Vector3,
+    SceneUpdate,
+    SceneEntity,
+    ModelPrimitive,
+    CubePrimitive,
+    CompressedImage,
+    Color,
     FrameTransform,
+    FrameTransforms,
+    LinePrimitive,
+    LinePrimitiveLineType,
 )
 
-import numpy as np
-import os
-import time
-
-
-
 class FoxgloveBridge:
-    def __init__(self):
-        self._initialized = False
-        self._server_started = False
-        # JSON channels
-        self.sign_channel = None
-        self.traffic_light_channel = None
-        self.lane_channel = None
-        self.vehicle_channel = None
-        self.vehicle_state_channel = None
-        # PointCloud channel (native Foxglove schema)
-        self.lidar_channel = None
-        self.scene_channel = None
-        # Transform channel for base_link → world mapping
-        self.transforms_channel = None
+    """Bridge class for sending data to Foxglove Studio"""
     
-    def start_server(self):
-        """Start the Foxglove WebSocket server"""
-        if self._server_started:
-            return
+    def __init__(self, host="0.0.0.0", port=8765):
+        self.host = host
+        self.port = port
+        self.server = None
+        self.channels = {}
+        self._vehicle_3d_sent = False
+        self._urdf_path = self._get_urdf_path()
         
-        print("[FoxgloveBridge] Starting Foxglove WebSocket server...")
-        foxglove.set_log_level("INFO")
-        foxglove.start_server()
-        self._server_started = True
-        print("[FoxgloveBridge] Foxglove server started on ws://localhost:8765")
+    def start_server(self):
+        """Start the Foxglove WebSocket server in a background thread"""
+        try:
+            self.server = start_server(
+                name="BeamNG Simulation",
+                host=self.host,
+                port=self.port
+            )
+            print(f"Foxglove server started on {self.host}:{self.port}")
+        except Exception as e:
+            print(f"Error starting Foxglove server: {e}")
+            raise
     
     def initialize_channels(self):
-        """Initialize channels after server has started"""
-        if self._initialized:
-            return
+        """Initialize all channels for different data types"""
+        # Lane detection channel (JSON)
+        self.channels['lane'] = Channel(
+            topic="/lane_detection",
+            message_encoding="json",
+            schema={
+                "type": "object",
+                "properties": {
+                    "timestamp": {"type": "integer"},
+                    "lane_center": {"type": "number"},
+                    "vehicle_center": {"type": "number"},
+                    "deviation": {"type": "number"},
+                    "confidence": {"type": "number"},
+                    "left_lane_points": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "x": {"type": "number"},
+                                "y": {"type": "number"},
+                                "z": {"type": "number"}
+                            }
+                        }
+                    },
+                    "right_lane_points": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "x": {"type": "number"},
+                                "y": {"type": "number"},
+                                "z": {"type": "number"}
+                            }
+                        }
+                    }
+                }
+            }
+        )
+        self.lane_channel = self.channels['lane']
         
-        print("[FoxgloveBridge] Initializing channels...")
+        # Vehicle control channel (JSON)
+        self.channels['vehicle_control'] = Channel(
+            topic="/vehicle_control",
+            message_encoding="json",
+            schema={
+                "type": "object",
+                "properties": {
+                    "timestamp": {"type": "integer"},
+                    "speed_kph": {"type": "number"},
+                    "steering": {"type": "number"},
+                    "throttle": {"type": "number"},
+                    "brake": {"type": "number"}
+                }
+            }
+        )
         
-        # JSON channels
-        self.sign_channel = Channel("/detections/sign", message_encoding="json")
-        self.traffic_light_channel = Channel("/detections/traffic_light", message_encoding="json")
-        self.lane_channel = Channel("/detections/lane", message_encoding="json")
-        self.vehicle_channel = Channel("/detections/vehicle", message_encoding="json")
-        self.vehicle_state_channel = Channel("/vehicle/state", message_encoding="json")
+        # Vehicle pose channel (PosesInFrame)
+        self.channels['vehicle_pose'] = PosesInFrameChannel(topic="/vehicle_pose")
         
-        # PointCloud channel (native Foxglove schema)
-        self.lidar_channel = PointCloudChannel(topic="/lidar/pointcloud")
+        # TF tree channel (FrameTransforms)
+        self.channels['tf'] = FrameTransformsChannel(topic="/tf")
         
-        # Scene channel for 3D models
-        self.scene_channel = SceneUpdateChannel("/scene")
+        # Scene update channel (for 3D model)
+        self.channels['scene'] = SceneUpdateChannel(topic="/scene")
         
-        # Transforms channel for frame mapping
-        self.transforms_channel = Channel("/tf", message_encoding="json")
+        # LiDAR point cloud channel (PointCloud)
+        self.channels['lidar'] = PointCloudChannel(topic="/lidar")
         
-        self._initialized = True
-        print("[FoxgloveBridge] Channels initialized successfully")
+        # Camera image channel (CompressedImage)
+        self.channels['camera'] = CompressedImageChannel(topic="/camera/image/compressed")
+        
+        # Lane path channel (LinePrimitive)
+        self.channels['lane_path'] = LinePrimitiveChannel(topic="/lane_path")
+        
+        # Vehicle detection channel (JSON)
+        self.channels['vehicle_detection'] = Channel(
+            topic="/vehicle_detections",
+            message_encoding="json",
+            schema={
+                "type": "object",
+                "properties": {
+                    "timestamp": {"type": "integer"},
+                    "type": {"type": "string"},
+                    "x": {"type": "number"},
+                    "y": {"type": "number"},
+                    "width": {"type": "number"},
+                    "height": {"type": "number"},
+                    "confidence": {"type": "number"}
+                }
+            }
+        )
+        self.vehicle_channel = self.channels['vehicle_detection']
+        
+        # Sign detection channel (JSON)
+        self.channels['sign_detection'] = Channel(
+            topic="/sign_detections",
+            message_encoding="json",
+            schema={
+                "type": "object",
+                "properties": {
+                    "timestamp": {"type": "integer"},
+                    "type": {"type": "string"},
+                    "x": {"type": "number"},
+                    "y": {"type": "number"},
+                    "width": {"type": "number"},
+                    "height": {"type": "number"},
+                    "confidence": {"type": "number"}
+                }
+            }
+        )
+        self.sign_channel = self.channels['sign_detection']
+        
+        print("All Foxglove channels initialized")
     
-    def send_sign_detection(self, sign_type, x, y, confidence):
-        if not self._initialized:
-            print("[FoxgloveBridge] Warning: Bridge not initialized, skipping sign detection")
-            return
-        
-        message = {
-            "type": sign_type,
-            "x": x,
-            "y": y,
-            "confidence": confidence
-        }
-        try:
-            print(f"[FoxgloveBridge] Sending sign detection: {message}")
-            self.sign_channel.log(message)
-        except Exception as e:
-            print(f"[FoxgloveBridge] Error sending sign detection: {e}")
+    def _timestamp_to_time(self, timestamp_ns):
+        """Convert nanoseconds timestamp to Timestamp message"""
+        sec = timestamp_ns // 1_000_000_000
+        nsec = timestamp_ns % 1_000_000_000
+        return Timestamp(sec=sec, nsec=nsec)
     
-    # def send_traffic_light_detection(self, state, x, y, confidence):
-    #     self.traffic_light_channel.log({
-    #         "state": state,
-    #         "x": x,
-    #         "y": y,
-    #         "confidence": confidence
-    #     })
-    
-    def send_lane_detection(self, lane_center, vehicle_center, deviation, confidence, left_lane_points=None, right_lane_points=None):
-        if not self._initialized:
-            print("[FoxgloveBridge] Warning: Bridge not initialized, skipping lane detection")
-            return
-        
+    def send_vehicle_control(self, timestamp_ns, speed_kph, steering, throttle, brake):
+        """Send vehicle control state"""
         message = {
-            "lane_center": lane_center,
-            "vehicle_center": vehicle_center,
-            "deviation": deviation,
-            "confidence": confidence
-        }
-        if left_lane_points is not None:
-            message["left_lane_points"] = [
-                {"x": float(p[0]), "y": float(p[1]), "z": float(p[2]) if len(p) > 2 else 0.0}
-                for p in left_lane_points
-            ]
-        if right_lane_points is not None:
-            message["right_lane_points"] = [
-                {"x": float(p[0]), "y": float(p[1]), "z": float(p[2]) if len(p) > 2 else 0.0}
-                for p in right_lane_points
-            ]
-        try:
-            print(f"[FoxgloveBridge] Sending lane detection: {message}")
-            self.lane_channel.log(message)
-        except Exception as e:
-            print(f"[FoxgloveBridge] Error sending lane detection: {e}")
-
-    def send_vehicle_detection(self, detection_type, x, y, width, height, confidence):
-        if not self._initialized:
-            print("[FoxgloveBridge] Warning: Bridge not initialized, skipping vehicle detection")
-            return
-        
-        message = {
-            "type": detection_type,
-            "x": x,
-            "y": y,
-            "width": width,
-            "height": height,
-            "confidence": confidence
-        }
-        try:
-            print(f"[FoxgloveBridge] Sending vehicle detection: {message}")
-            self.vehicle_channel.log(message)
-        except Exception as e:
-            print(f"[FoxgloveBridge] Error sending vehicle detection: {e}")
-    
-    def send_vehicle_state(self, speed_kph, steering, throttle, x, y, z):
-        if not self._initialized:
-            print("[FoxgloveBridge] Warning: Bridge not initialized, skipping vehicle state")
-            return
-        
-        # Ensure all values are standard Python floats for JSON compatibility
-        message = {
+            "timestamp": timestamp_ns,
             "speed_kph": float(speed_kph),
             "steering": float(steering),
             "throttle": float(throttle),
-            "x": float(x),
-            "y": float(y),
-            "z": float(z)
+            "brake": float(brake)
         }
-        try:
-            print(f"[FoxgloveBridge] Sending vehicle state: {message}")
-            self.vehicle_state_channel.log(message)
-        except Exception as e:
-            print(f"[FoxgloveBridge] Error sending vehicle state: {e}")
+        self.channels['vehicle_control'].log(message)
     
-    def publish_vehicle_transform(self, x, y, z, yaw=0.0):
-        """
-        Publish transform from world → base_link to establish frame hierarchy in Foxglove.
-        This allows base_link-relative data (like LiDAR) to follow the vehicle.
+    def send_vehicle_pose(self, timestamp_ns, x, y, z, quat_x, quat_y, quat_z, quat_w, frame_id="map"):
+        """Send vehicle pose as PosesInFrame in the map frame"""
+        timestamp = self._timestamp_to_time(timestamp_ns)
         
-        Args:
-            x, y, z: Vehicle position in world coordinates
-            yaw: Vehicle yaw angle in radians
-        """
-        if not self._initialized:
-            print("[FoxgloveBridge] Warning: Bridge not initialized, skipping transform")
-            return
-        
-        try:
-            # Convert yaw to quaternion
-            half_yaw = yaw / 2.0
-            qx = 0.0
-            qy = 0.0
-            qz = np.sin(half_yaw)
-            qw = np.cos(half_yaw)
-            
-            # Create FrameTransform message
-            tf_msg = {
-                "timestamp": int(time.time() * 1e9),
-                "parent_frame_id": "world",
-                "child_frame_id": "base_link",
-                "translation": {
-                    "x": float(x),
-                    "y": float(y),
-                    "z": float(z)
-                },
-                "rotation": {
-                    "x": float(qx),
-                    "y": float(qy),
-                    "z": float(qz),
-                    "w": float(qw)
-                }
-            }
-            
-            self.transforms_channel.log(tf_msg)
-            print(f"[FoxgloveBridge] Published transform: world → base_link at ({x:.1f}, {y:.1f}, {z:.1f})")
-            
-        except Exception as e:
-            print(f"[FoxgloveBridge] Error publishing transform: {e}")
-    
-    def send_lidar(self, points):
-        """
-        Send LiDAR point cloud data using native Foxglove PointCloud schema.
-        Uses world frame to match vehicle position.
-        Args:
-            points: numpy array or list of points with shape (N, 3) containing x, y, z coordinates
-        """
-        if not self._initialized:
-            print("[FoxgloveBridge] Warning: Bridge not initialized, skipping LiDAR")
-            return
-        
-        if points is None or len(points) == 0:
-            print("[FoxgloveBridge] No LiDAR points to send.")
-            return
-        
-        try:
-            # Convert to float32 numpy array
-            points_array = np.asarray(points, dtype=np.float32)
-            
-            # Ensure shape is (N, 3)
-            if len(points_array.shape) == 1:
-                points_array = points_array.reshape(-1, 3)
-            
-            # Define PointCloud fields (x, y, z)
-            f32 = PackedElementFieldNumericType.Float32
-            fields = [
-                PackedElementField(name="x", offset=0, type=f32),
-                PackedElementField(name="y", offset=4, type=f32),
-                PackedElementField(name="z", offset=8, type=f32),
-            ]
-            
-            # Flatten to bytes
-            data_bytes = points_array.tobytes()
-            
-            # Create timestamp
-            stamp = int(time.time() * 1e9)
-            timestamp = Timestamp(sec=int(stamp // 1e9), nsec=int(stamp % 1e9))
-            
-            # Create PointCloud message using world frame instead of base_link
-            pc = PointCloud(
-                timestamp=timestamp,
-                frame_id="world",  # Changed from base_link to world
-                point_stride=12,  # 3 fields * 4 bytes each
-                fields=fields,
-                data=data_bytes,
-            )
-            
-            # Send to Foxglove
-            self.lidar_channel.log(pc, log_time=stamp)
-            print(f"[FoxgloveBridge] Sent {len(points_array)} LiDAR points to /lidar/pointcloud (world frame)")
-            
-        except Exception as e:
-            print(f"[FoxgloveBridge] Error sending LiDAR: {e}")
-    
-    def send_vehicle_3d(self, x, y, z, yaw=0.0):
-        """
-        Send vehicle position and orientation with BMW X5 GLB models.
-        Uses Quaternion helper for orientation.
-        """
-        try:
-            # Convert yaw to quaternion (rotation around Z axis)
-            half_yaw = yaw / 2.0
-            qx = 0.0
-            qy = 0.0
-            qz = np.sin(half_yaw)
-            qw = np.cos(half_yaw)
-
-            entities = []
-
-            # Base directory for GLB files
-            model_dir = os.path.join(
-                os.path.dirname(__file__),
-                "model", "bmw_x5", "meshes"
-            )
-
-            # Car body
-            body_glb_path = os.path.join(model_dir, "car_body.glb")
-            if os.path.exists(body_glb_path):
-                body_entity = SceneEntity(
-                    id="bmw_body",
-                    frame_id="world",
-                    model=ModelPrimitive(
-                        url=f"file://{body_glb_path}",
-                        pose=Pose(
-                            position=Vector3(x=float(x), y=float(y), z=float(z)),
-                            orientation=Quaternion(x=float(qx), y=float(qy), z=float(qz), w=float(qw)),
-                        ),
-                        scale=Vector3(x=1.0, y=1.0, z=1.0),
-                    ),
+        # Send the pose of the vehicle (base_link) in the map frame
+        # This visualizes where base_link is positioned in the world
+        pose = PosesInFrame(
+            timestamp=timestamp,
+            frame_id=frame_id,
+            poses=[
+                Pose(
+                    position=Vector3(x=float(x), y=float(y), z=float(z)),
+                    orientation=Quaternion(x=float(quat_x), y=float(quat_y), z=float(quat_z), w=float(quat_w))
                 )
-                entities.append(body_entity)
-
-            # Wheel positions from URDF (relative to body)
-            wheels = [
-                ("front_left_wheel", 1.3, 0.8, -0.3, "wheel_front_left.glb"),
-                ("front_right_wheel", 1.3, -0.8, -0.3, "wheel_front_right.glb"),
-                ("rear_left_wheel", -1.3, 0.8, -0.3, "wheel_rear_left.glb"),
-                ("rear_right_wheel", -1.3, -0.8, -0.3, "wheel_rear_right.glb"),
             ]
-
-            for wheel_id, rel_x, rel_y, rel_z, mesh_file in wheels:
-                glb_path = os.path.join(model_dir, mesh_file)
-                if os.path.exists(glb_path):
-                    wheel_entity = SceneEntity(
-                        id=wheel_id,
-                        frame_id="world",
-                        model=ModelPrimitive(
-                            url=f"file://{glb_path}",
-                            pose=Pose(
-                                position=Vector3(x=float(x + rel_x), y=float(y + rel_y), z=float(z + rel_z)),
-                                orientation=Quaternion(x=float(qx), y=float(qy), z=float(qz), w=float(qw)),
-                            ),
-                            scale=Vector3(x=1.0, y=1.0, z=1.0),
-                        ),
-                    )
-                    entities.append(wheel_entity)
-
-            if entities:
-                scene_update = SceneUpdate(entities=entities)
-                print(f"[FoxgloveBridge] Sending BMW X5 3D model at ({x:.1f}, {y:.1f}, {z:.1f}), yaw={np.degrees(yaw):.1f}°")
-                self.scene_channel.publish(scene_update)
-            else:
-                print(f"[FoxgloveBridge] Warning: No GLB files found in {model_dir}")
-        except Exception as e:
-            print(f"[FoxgloveBridge] Error sending vehicle 3D: {e}")
+        )
+        
+        self.channels['vehicle_pose'].log(pose)
     
+    def send_tf_tree(self, timestamp_ns, x, y, z, quat_x, quat_y, quat_z, quat_w):
+        """Send TF tree with map -> base_link -> lidar_top and map -> base_link -> camera_front transforms"""
+        timestamp = self._timestamp_to_time(timestamp_ns)
+        
+        # Build transforms for complete hierarchy:
+        # map (root/world origin) - base_link (vehicle body at position)
+        # lidar_top (LiDAR sensor mount)
+        # camera_front (front camera mount)
+        transforms = [
+            # Vehicle position in world (map - base_link establishes where vehicle is)
+            FrameTransform(
+                timestamp=timestamp,
+                parent_frame_id="map",
+                child_frame_id="base_link",
+                translation=Vector3(x=float(x), y=float(y), z=float(z)),
+                rotation=Quaternion(x=float(quat_x), y=float(quat_y), z=float(quat_z), w=float(quat_w))
+            ),
+            # LiDAR sensor mount (base_link - lidar_top is fixed offset)
+            FrameTransform(
+                timestamp=timestamp,
+                parent_frame_id="base_link",
+                child_frame_id="lidar_top",
+                translation=Vector3(x=0.0, y=-0.35, z=1.425),
+                rotation=Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)
+            ),
+            # Front camera mount (base_link - camera_front is fixed offset)
+            FrameTransform(
+                timestamp=timestamp,
+                parent_frame_id="base_link",
+                child_frame_id="camera_front",
+                translation=Vector3(x=0.0, y=-1.3, z=1.4),
+                rotation=Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)
+            )
+        ]
+        
+        # Send as FrameTransforms message
+        tf_message = FrameTransforms(transforms=transforms)
+        self.channels['tf'].log(tf_message)
+    
+    def _get_urdf_path(self):
+        """Get URDF file path as file:// URL"""
+        bridge_dir = Path(__file__).parent
+        urdf_path = bridge_dir / "model" / "bmw_x5" / "bmw_x5.urdf"
+        if urdf_path.exists():
+            file_url = urdf_path.as_uri()
+            print(f"URDF file available at: {file_url}")
+            return file_url
+        else:
+            print(f"Warning: URDF file not found at {urdf_path}")
+            return None
+    
+    def send_vehicle_3d(self, timestamp_ns, x, y, z, quat_x, quat_y, quat_z, quat_w, frame_id="map"):
+        """Send 3D vehicle model using SceneUpdate
+        
+        Tries multiple approaches:
+        1. URDF file via file:// URL (can be added to Foxglove 3D panel as custom layer)
+        2. GLB meshes embedded in ModelPrimitives
+        3. Fallback to simple cube
+        """
+        if self._vehicle_3d_sent:
+            # Only send once
+            return
+        
+        timestamp = self._timestamp_to_time(timestamp_ns)
+        entities = []
+        
+        if self._urdf_path:
+            print(f"URDF model available at: {self._urdf_path}")
+            print("To view in Foxglove: Open the 3D panel → Add layer → select URDF layer → paste URL above")
+        
+        # Approach 2: Send as GLB meshes (embedded in scene)
+        try:
+            with open(r"c:\Users\user\Documents\github\self-driving-car-simulation\beamng_sim\foxglove_integration\model\bmw_x5\meshes\car_body.glb", "rb") as f:
+                body_data = f.read()
+            
+            body_model = ModelPrimitive(
+                pose=Pose(
+                    position=Vector3(x=float(x), y=float(y), z=float(z)),
+                    orientation=Quaternion(x=float(quat_x), y=float(quat_y), z=float(quat_z), w=float(quat_w))
+                ),
+                scale=Vector3(x=1.0, y=1.0, z=1.0),
+                data=body_data,
+                media_type="model/gltf-binary"
+            )
+            
+            body_entity = SceneEntity(
+                timestamp=timestamp,
+                frame_id=frame_id,
+                id="vehicle_body",
+                models=[body_model]
+            )
+            entities.append(body_entity)
+            print("Vehicle body mesh loaded successfully")
+        except Exception as e:
+            print(f"Warning: Could not load car body mesh: {e}")
+        
+        # Front left wheel
+        try:
+            with open(r"c:\Users\user\Documents\github\self-driving-car-simulation\beamng_sim\foxglove_integration\model\bmw_x5\meshes\wheel_front_left.glb", "rb") as f:
+                wheel_fl_data = f.read()
+            
+            wheel_fl_model = ModelPrimitive(
+                pose=Pose(
+                    position=Vector3(x=float(x) + 1.3, y=float(y) + 0.8, z=float(z) - 0.3),
+                    orientation=Quaternion(x=float(quat_x), y=float(quat_y), z=float(quat_z), w=float(quat_w))
+                ),
+                scale=Vector3(x=1.0, y=1.0, z=1.0),
+                data=wheel_fl_data,
+                media_type="model/gltf-binary"
+            )
+            
+            wheel_fl_entity = SceneEntity(
+                timestamp=timestamp,
+                frame_id=frame_id,
+                id="wheel_front_left",
+                models=[wheel_fl_model]
+            )
+            entities.append(wheel_fl_entity)
+        except Exception as e:
+            print(f"Warning: Could not load front left wheel mesh: {e}")
+        
+        # Front right wheel
+        try:
+            with open(r"c:\Users\user\Documents\github\self-driving-car-simulation\beamng_sim\foxglove_integration\model\bmw_x5\meshes\wheel_front_right.glb", "rb") as f:
+                wheel_fr_data = f.read()
+            
+            wheel_fr_model = ModelPrimitive(
+                pose=Pose(
+                    position=Vector3(x=float(x) + 1.3, y=float(y) - 0.8, z=float(z) - 0.3),
+                    orientation=Quaternion(x=float(quat_x), y=float(quat_y), z=float(quat_z), w=float(quat_w))
+                ),
+                scale=Vector3(x=1.0, y=1.0, z=1.0),
+                data=wheel_fr_data,
+                media_type="model/gltf-binary"
+            )
+            
+            wheel_fr_entity = SceneEntity(
+                timestamp=timestamp,
+                frame_id=frame_id,
+                id="wheel_front_right",
+                models=[wheel_fr_model]
+            )
+            entities.append(wheel_fr_entity)
+        except Exception as e:
+            print(f"Warning: Could not load front right wheel mesh: {e}")
+        
+        # Rear left wheel
+        try:
+            with open(r"c:\Users\user\Documents\github\self-driving-car-simulation\beamng_sim\foxglove_integration\model\bmw_x5\meshes\wheel_rear_left.glb", "rb") as f:
+                wheel_rl_data = f.read()
+            
+            wheel_rl_model = ModelPrimitive(
+                pose=Pose(
+                    position=Vector3(x=float(x) - 1.3, y=float(y) + 0.8, z=float(z) - 0.3),
+                    orientation=Quaternion(x=float(quat_x), y=float(quat_y), z=float(quat_z), w=float(quat_w))
+                ),
+                scale=Vector3(x=1.0, y=1.0, z=1.0),
+                data=wheel_rl_data,
+                media_type="model/gltf-binary"
+            )
+            
+            wheel_rl_entity = SceneEntity(
+                timestamp=timestamp,
+                frame_id=frame_id,
+                id="wheel_rear_left",
+                models=[wheel_rl_model]
+            )
+            entities.append(wheel_rl_entity)
+        except Exception as e:
+            print(f"Warning: Could not load rear left wheel mesh: {e}")
+        
+        # Rear right wheel
+        try:
+            with open(r"c:\Users\user\Documents\github\self-driving-car-simulation\beamng_sim\foxglove_integration\model\bmw_x5\meshes\wheel_rear_right.glb", "rb") as f:
+                wheel_rr_data = f.read()
+            
+            wheel_rr_model = ModelPrimitive(
+                pose=Pose(
+                    position=Vector3(x=float(x) - 1.3, y=float(y) - 0.8, z=float(z) - 0.3),
+                    orientation=Quaternion(x=float(quat_x), y=float(quat_y), z=float(quat_z), w=float(quat_w))
+                ),
+                scale=Vector3(x=1.0, y=1.0, z=1.0),
+                data=wheel_rr_data,
+                media_type="model/gltf-binary"
+            )
+            
+            wheel_rr_entity = SceneEntity(
+                timestamp=timestamp,
+                frame_id=frame_id,
+                id="wheel_rear_right",
+                models=[wheel_rr_model]
+            )
+            entities.append(wheel_rr_entity)
+        except Exception as e:
+            print(f"Warning: Could not load rear right wheel mesh: {e}")
+        
+        if not entities:
+            print("No meshes loaded, using cube fallback")
+            cube = CubePrimitive(
+                pose=Pose(
+                    position=Vector3(x=float(x), y=float(y), z=float(z)),
+                    orientation=Quaternion(x=float(quat_x), y=float(quat_y), z=float(quat_z), w=float(quat_w))
+                ),
+                size=Vector3(x=2.0, y=1.0, z=1.0),
+                color=Color(r=0.1, g=0.1, b=0.8, a=1.0)
+            )
+            entity = SceneEntity(
+                timestamp=timestamp,
+                frame_id=frame_id,
+                id="vehicle_model",
+                cubes=[cube]
+            )
+            entities.append(entity)
+        
+        if entities:
+            scene_update = SceneUpdate(entities=entities)
+            self.channels['scene'].log(scene_update)
+            self._vehicle_3d_sent = True
+    
+    def send_lidar(self, points, timestamp_ns, frame_id="lidar_top"):
+        """
+        Send LiDAR point cloud
+        Args:
+            points: numpy array of shape (N, 3) or (N, 4) with x, y, z, [intensity]
+            timestamp_ns: timestamp in nanoseconds
+            frame_id: frame ID for the point cloud (should be "lidar_top" for sensor-relative, or "map" for world-relative)
+        """
+        if points is None or len(points) == 0:
+            return
+        
+        timestamp = self._timestamp_to_time(timestamp_ns)
+        
+        if not isinstance(points, np.ndarray):
+            points = np.array(points)
+        
+        if points.shape[1] == 3:
+            # x, y, z only
+            num_points = points.shape[0]
+            point_stride = 12
+            fields = [
+                PackedElementField(name="x", offset=0, type=PackedElementFieldNumericType.Float32),
+                PackedElementField(name="y", offset=4, type=PackedElementFieldNumericType.Float32),
+                PackedElementField(name="z", offset=8, type=PackedElementFieldNumericType.Float32)
+            ]
+            data = points.astype(np.float32).tobytes()
+        elif points.shape[1] == 4:
+            num_points = points.shape[0]
+            point_stride = 16
+            fields = [
+                PackedElementField(name="x", offset=0, type=PackedElementFieldNumericType.Float32),
+                PackedElementField(name="y", offset=4, type=PackedElementFieldNumericType.Float32),
+                PackedElementField(name="z", offset=8, type=PackedElementFieldNumericType.Float32),
+                PackedElementField(name="intensity", offset=12, type=PackedElementFieldNumericType.Float32)
+            ]
+            data = points.astype(np.float32).tobytes()
+        else:
+            raise ValueError(f"Points must have shape (N, 3) or (N, 4), got {points.shape}")
+        
+        point_cloud = PointCloud(
+            timestamp=timestamp,
+            frame_id=frame_id,
+            pose=Pose(
+                position=Vector3(x=0.0, y=0.0, z=0.0),
+                orientation=Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)
+            ),
+            point_stride=point_stride,
+            fields=fields,
+            data=data
+        )
+        
+        self.channels['lidar'].log(point_cloud)
+    
+    def send_camera_image(self, image, timestamp_ns, frame_id="camera"):
+        """
+        Send camera image as CompressedImage
+        Args:
+            image: numpy array (BGR format from OpenCV)
+            timestamp_ns: timestamp in nanoseconds
+            frame_id: frame ID for the image
+        """
+        if image is None:
+            return
+        
+        timestamp = self._timestamp_to_time(timestamp_ns)
+        
+        if len(image.shape) == 3 and image.shape[2] == 3:
+            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        else:
+            image_rgb = image
+        
+        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 85]
+        result, encoded_image = cv2.imencode('.jpg', image_rgb, encode_param)
+        
+        if not result:
+            print("Error encoding image")
+            return
+        
+        compressed_image = CompressedImage(
+            timestamp=timestamp,
+            frame_id=frame_id,
+            data=encoded_image.tobytes(),
+            format="jpeg"
+        )
+        
+        self.channels['camera'].log(compressed_image)
+
+    def send_lane_path(self, lane_points, timestamp_ns, lane_id="lane_path", color=None, thickness=0.1, frame_id="map"):
+        """
+        Send lane path as LinePrimitive on dedicated /lane_path channel
+        Args:
+            lane_points: numpy array of shape (N, 3) with x, y, z coordinates
+            timestamp_ns: timestamp in nanoseconds
+            lane_id: unique identifier for this lane
+            color: Color object (default: yellow)
+            thickness: line thickness in meters
+            frame_id: frame ID (default: "map")
+        """
+        if lane_points is None or len(lane_points) < 2:
+            return
+        
+        if color is None:
+            color = Color(r=1.0, g=1.0, b=0.0, a=1.0)
+        
+        points = [
+            Vector3(x=float(p[0]), y=float(p[1]), z=float(p[2]))
+            for p in lane_points
+        ]
+        
+        line_primitive = LinePrimitive(
+            type=LinePrimitiveLineType.LINE_STRIP,
+            pose=Pose(
+                position=Vector3(x=0.0, y=0.0, z=0.0),
+                orientation=Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)
+            ),
+            thickness=thickness,
+            scale_invariant=False,
+            points=points,
+            color=color
+        )
+        
+        self.channels['lane_path'].log(line_primitive)
+

@@ -6,6 +6,7 @@ from beamng_sim.utils.pid_controller import PIDController
 
 from beamngpy import BeamNGpy, Scenario, Vehicle
 from beamngpy.sensors import Camera, Lidar, Radar
+from foxglove.schemas import Color
 
 from beamng_sim.sign.detect_classify import random_brightness
 
@@ -47,6 +48,26 @@ def yaw_to_quat(yaw_deg):
     w = math.cos(yaw / 2)
     z = math.sin(yaw / 2)
     return (0.0, 0.0, z, w)
+
+def yaw_rad_to_quaternion(yaw_rad):
+    """
+    Convert yaw angle in radians to a quaternion representation for vehicle orientation.
+    Args:
+        yaw_rad (float): Yaw angle in radians
+    Returns:
+        tuple: Quaternion (x, y, z, w)
+    """
+    w = math.cos(yaw_rad / 2)
+    z = math.sin(yaw_rad / 2)
+    return (0.0, 0.0, z, w)
+
+def get_timestamp_ns():
+    """
+    Get current timestamp in nanoseconds since epoch.
+    Returns:
+        int: Timestamp in nanoseconds
+    """
+    return int(time.time_ns())
 
 def load_models():
     """
@@ -160,8 +181,8 @@ def sim_setup():
             requested_update_time=0.01,
             is_using_shared_memory=True,
             is_rotate_mode=False,
-            is_360_mode=True,
-            # horizontal_angle=170,  # Horizontal field of view
+            is_360_mode=False,
+            horizontal_angle=170,  # Horizontal field of view
             vertical_angle=45,  # Vertical field of view
             vertical_resolution=64,  # Number of lasers/channels
             density=3,
@@ -388,7 +409,9 @@ def main():
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     log_filename = f"drive_log_{timestamp}.csv"
     log_path = os.path.join(log_dir, log_filename)
-    log_fields = ["frame", "deviation_m", "lane_center", "vehicle_center", "steering", "throttle", "speed_kph"]
+    log_fields = ["frame", "deviation_m", "lane_center", "vehicle_center", "steering", "throttle", "speed_kph",
+                  "vehicle_pos_x", "vehicle_pos_y", "vehicle_pos_z", "vehicle_yaw_rad", "vehicle_dir_x", "vehicle_dir_y", "vehicle_dir_z",
+                  "lidar_pos_x", "lidar_pos_y", "lidar_pos_z", "lidar_yaw_rad"]
     log_file = open(log_path, mode="w", newline="")
     log_writer = csv.DictWriter(log_file, fieldnames=log_fields)
     log_writer.writeheader()
@@ -408,6 +431,13 @@ def main():
 
             images = camera.stream()
             img = np.array(images['colour'])
+
+            # Send camera image to Foxglove
+            try:
+                timestamp_ns = get_timestamp_ns()
+                bridge.send_camera_image(img, timestamp_ns, frame_id="camera")
+            except Exception as camera_send_e:
+                print(f"Error sending camera image to Foxglove: {camera_send_e}")
 
             # Speed
             try:
@@ -429,6 +459,18 @@ def main():
 
             # Log to CSV
             fused_confidence = fused_metrics.get('confidence', 0.0)
+            
+            # Calculate vehicle yaw from direction
+            car_yaw = np.arctan2(-direction[1], -direction[0])
+            
+            # LiDAR pose (offset from base_link + vehicle rotation/position)
+            lidar_offset = np.array([0.0, -0.35, 1.425])
+            from scipy.spatial.transform import Rotation as R
+            car_quat = yaw_rad_to_quaternion(car_yaw)
+            rotation = R.from_quat([car_quat[0], car_quat[1], car_quat[2], car_quat[3]])
+            lidar_pos_in_map = rotation.apply(lidar_offset) + car_pos
+            lidar_yaw = car_yaw  # LiDAR has same yaw as vehicle
+            
             log_writer.writerow({
                 "frame": step_i,
                 "deviation_m": round(deviation, 3) if deviation is not None else 0.0,
@@ -436,7 +478,18 @@ def main():
                 "vehicle_center": round(vehicle_center, 3) if vehicle_center is not None else 0.0,
                 "steering": round(steering, 3),
                 "throttle": round(throttle, 3),
-                "speed_kph": round(speed_kph, 3)
+                "speed_kph": round(speed_kph, 3),
+                "vehicle_pos_x": round(car_pos[0], 3),
+                "vehicle_pos_y": round(car_pos[1], 3),
+                "vehicle_pos_z": round(car_pos[2], 3),
+                "vehicle_yaw_rad": round(car_yaw, 4),
+                "vehicle_dir_x": round(direction[0], 4),
+                "vehicle_dir_y": round(direction[1], 4),
+                "vehicle_dir_z": round(direction[2], 4),
+                "lidar_pos_x": round(lidar_pos_in_map[0], 3),
+                "lidar_pos_y": round(lidar_pos_in_map[1], 3),
+                "lidar_pos_z": round(lidar_pos_in_map[2], 3),
+                "lidar_yaw_rad": round(lidar_yaw, 4),
             })
 
 
@@ -482,7 +535,9 @@ def main():
             step_i += 1
 
             try:
+                timestamp_ns = get_timestamp_ns()
                 lane_message = {
+                    "timestamp": timestamp_ns,
                     "lane_center": float(lane_center) if lane_center is not None else 0.0,
                     "vehicle_center": float(vehicle_center) if vehicle_center is not None else 0.0,
                     "deviation": float(deviation) if deviation is not None else 0.0,
@@ -500,60 +555,126 @@ def main():
                     ]
                 bridge.lane_channel.log(lane_message)
                 print(f"Lane detection sent to Foxglove: deviation={deviation:.2f}")
+                
+                # Send lane paths
+                try:
+                    timestamp_ns = get_timestamp_ns()
+                    if lidar_lane_boundaries and 'left_lane_points' in lidar_lane_boundaries:
+                        left_points = np.array(lidar_lane_boundaries['left_lane_points'])
+                        if len(left_points) > 0:
+                            bridge.send_lane_path(
+                                left_points,
+                                timestamp_ns=timestamp_ns,
+                                lane_id="left_lane",
+                                color=Color(r=1.0, g=0.0, b=0.0, a=1.0),  # Red
+                                thickness=0.2
+                            )
+                    
+                    if lidar_lane_boundaries and 'right_lane_points' in lidar_lane_boundaries:
+                        right_points = np.array(lidar_lane_boundaries['right_lane_points'])
+                        if len(right_points) > 0:
+                            bridge.send_lane_path(
+                                right_points,
+                                timestamp_ns=timestamp_ns,
+                                lane_id="right_lane",
+                                color=Color(r=0.0, g=0.0, b=1.0, a=1.0),  # Blue
+                                thickness=0.2
+                            )
+                except Exception as lane_visual_e:
+                    print(f"Error sending lane visualization: {lane_visual_e}")
             except Exception as lane_det_send_e:
                 print(f"Error sending lane detection to Foxglove: {lane_det_send_e}")
 
             try:
-                vehicle_state_message = {
-                    "speed_kph": float(speed_kph),
-                    "steering": float(steering),
-                    "throttle": float(throttle),
-                    "x": float(car_pos[0]),
-                    "y": float(car_pos[1]),
-                    "z": float(car_pos[2])
-                }
-                bridge.vehicle_state_channel.log(vehicle_state_message)
-                print(f"Vehicle state sent: speed={speed_kph:.1f} kph, steering={steering:.2f}")
-            except Exception as vehicle_state_send_e:
-                print(f"Error sending vehicle state to Foxglove: {vehicle_state_send_e}")
-
-            try:
-                # Send vehicle transform (world → base_link)
-                car_yaw = np.arctan2(direction[1], direction[0])
-                bridge.publish_vehicle_transform(
-                    x=car_pos[0],
-                    y=car_pos[1],
-                    z=car_pos[2],
-                    yaw=car_yaw
+                # Send vehicle control state (steering, throttle, brake)
+                timestamp_ns = get_timestamp_ns()
+                bridge.send_vehicle_control(
+                    timestamp_ns=timestamp_ns,
+                    speed_kph=speed_kph,
+                    steering=steering,
+                    throttle=throttle,
+                    brake=0.0
                 )
-            except Exception as transform_send_e:
-                print(f"Error sending vehicle transform to Foxglove: {transform_send_e}")
+            except Exception as control_send_e:
+                print(f"Error sending vehicle control to Foxglove: {control_send_e}")
 
             try:
-                # Send 3D vehicle model
-                car_yaw = np.arctan2(direction[1], direction[0])
-                bridge.send_vehicle_3d(
+                # Send vehicle pose (PosesInFrame)
+                car_yaw = np.arctan2(-direction[1], -direction[0])
+                quat_x, quat_y, quat_z, quat_w = yaw_rad_to_quaternion(car_yaw)
+                timestamp_ns = get_timestamp_ns()
+                bridge.send_vehicle_pose(
+                    timestamp_ns=timestamp_ns,
                     x=car_pos[0],
                     y=car_pos[1],
                     z=car_pos[2],
-                    yaw=car_yaw
+                    quat_x=quat_x,
+                    quat_y=quat_y,
+                    quat_z=quat_z,
+                    quat_w=quat_w,
+                    frame_id="map"
+                )
+            except Exception as pose_send_e:
+                print(f"Error sending vehicle pose to Foxglove: {pose_send_e}")
+
+            try:
+                # Publish complete TF tree (map - base_link - lidar_top)
+                car_yaw = np.arctan2(-direction[1], -direction[0])
+                quat_x, quat_y, quat_z, quat_w = yaw_rad_to_quaternion(car_yaw)
+                timestamp_ns = get_timestamp_ns()
+                bridge.send_tf_tree(
+                    timestamp_ns=timestamp_ns,
+                    x=car_pos[0],
+                    y=car_pos[1],
+                    z=car_pos[2],
+                    quat_x=quat_x,
+                    quat_y=quat_y,
+                    quat_z=quat_z,
+                    quat_w=quat_w
+                )
+            except Exception as tf_send_e:
+                print(f"Error publishing TF tree to Foxglove: {tf_send_e}")
+
+            try:
+                car_yaw = np.arctan2(-direction[1], -direction[0])
+                quat_x, quat_y, quat_z, quat_w = yaw_rad_to_quaternion(car_yaw)
+                timestamp_ns = get_timestamp_ns()
+                bridge.send_vehicle_3d(
+                    timestamp_ns=timestamp_ns,
+                    x=car_pos[0],
+                    y=car_pos[1],
+                    z=car_pos[2],
+                    quat_x=quat_x,
+                    quat_y=quat_y,
+                    quat_z=quat_z,
+                    quat_w=quat_w,
+                    frame_id="map"
                 )
             except Exception as vehicle_3d_send_e:
                 print(f"Error sending vehicle 3D model to Foxglove: {vehicle_3d_send_e}")
 
             try:
+                # Send LiDAR point cloud
                 if filtered_points is not None and len(filtered_points) > 0:
-                    bridge.send_lidar(filtered_points)
+                    timestamp_ns = get_timestamp_ns()
+                    
+                    bridge.send_lidar(
+                        filtered_points,
+                        timestamp_ns=timestamp_ns,
+                        frame_id="map"
+                    )
             except Exception as lidar_send_e:
                 print(f"Error sending LiDAR to Foxglove: {lidar_send_e}")
 
             if step_i % 80 == 0:
+                timestamp_ns = get_timestamp_ns()
                 # Send vehicle detections
                 if vehicle_detections:
                     for detection in vehicle_detections:
                         try:
                             bbox = detection['bbox']
                             vehicle_det_message = {
+                                "timestamp": timestamp_ns,
                                 "type": detection['class'],
                                 "x": float((bbox[0] + bbox[2]) / 2),
                                 "y": float((bbox[1] + bbox[3]) / 2),
@@ -572,9 +693,12 @@ def main():
                         try:
                             bbox = sign_det['bbox']
                             sign_message = {
+                                "timestamp": timestamp_ns,
                                 "type": sign_det.get('classification', 'Unknown'),
                                 "x": float((bbox[0] + bbox[2]) / 2),
                                 "y": float((bbox[1] + bbox[3]) / 2),
+                                "width": float(bbox[2] - bbox[0]),
+                                "height": float(bbox[3] - bbox[1]),
                                 "confidence": float(sign_det.get('classification_confidence', 0.0))
                             }
                             bridge.sign_channel.log(sign_message)
