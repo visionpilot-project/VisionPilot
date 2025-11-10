@@ -125,57 +125,63 @@ Configuration files are located in the `beamng_sim/config/` directory:
 - [x] Sign classification & Detection (CNN / YOLOv8)
 - [x] Traffic light classification & Detection (CNN / YOLOv8)
 - [x] Lane detection Fusion (SCNN / CV)
-- [x] ⭐ Advanced lane detection using OpenCV (robust city/highway, lighting, outlier handling)
+- [x] Advanced lane detection using OpenCV (robust city/highway, lighting, outlier handling)
 - [x] Integrate Majority Voting system for CV
 - [x] Camera Calibration
-- [ ] Stop Sign Yield Sign Detection and Response
-- [ ] 💤 Lane Change Logic
-- [ ] 💤 Overtaking, Merging
+- [ ] Stop Sign Yield Sign Detection and Response (Will be implemented after improving sign classification accuracy; currently only warning is possible)
+- [ ] Detect multiple lanes
+- [ ] Lane Change Logic
+- [ ] 💤 Multi Camera Setup (Will implement after all other camera-based features are finished)
+- [ ] 💤 Overtaking, Merging (Will be part of Path Planning)
 
 ### Sensor Fusion & Calibration
 - [x] ⭐ Integrate Radar
 - [x] Integrate Lidar
-- [ ] Sensor Calibration Routines
-- [ ] Lidar Object Detection
-- [ ] Lidar lane boundary detection
-- [ ] 💤 SLAM (simultaneous localization and mapping)
-- [ ] 💤 GPS/IMU sensor
-- [ ] 💤 Map Matching algorithm
+- [ ] 🔥 Sensor Calibration Routines
+- [ ] 🔥 Lidar Object Detection
+- [ ] ~~💤 Lidar lane boundary detection~~ (Too performance heavy for a feature already well covered by lane-detection)
+- [ ] Map Matching algorithm
+- [ ] 💤 💤 SLAM (simultaneous localization and mapping)
+- [ ] 🔥 GPS/IMU sensor
 
 ### Control & Planning
 - [x] ⭐ Integrate vehicle control (Throttle, Steering, Braking Implemented) (PID needs further tuning)
 - [x] ⭐ Adaptive Cruise Control (Currently only basic Cruise Control implemented)
-- [ ] Emergency Braking / Collision Avoidance
-- [ ] Blindspot Monitoring
-- [ ] 💤 Global and Local path planning
+- [ ] 🔥 Emergency Braking / Collision Avoidance
+- [ ] Blindspot Monitoring (Can easily be implemented with prebuilt Beamng ADAS module)
+- [ ] Path planning
 - [ ] 💤 Behaviour planning and anticipation
-- [ ] 💤 End-to-end driving policy learning (RL, imitation learning)
-- [ ] 💤 Advanced traffic participant prediction (trajectory, intent)
+- [ ] 💤💤 End-to-end driving policy learning (RL, imitation learning)
+- [ ] 💤💤 Advanced traffic participant prediction (trajectory, intent)
 
 ### Simulation & Scenarios
 - [x] Integrate and test in BeamNG.tech simulation (replacing CARLA)
 - [x] Modularize and clean up BeamNG.tech pipeline
 - [x] Tweak lane detection parameters and thresholds
 - [ ] Traffic scenarios: driving in heavy, moderate, and light traffic
-- [ ] Test different weather and lighting conditions
+- [ ] Test Lighting conditions
 - [ ] 💤 Test using actual RC car
-- [ ] 💤 Multi Camera
-- [ ] 💤 Docker containerization
+- [ ] 💤💤 Docker containerization
 
 ### Visualization & Logging
 - [x] ⭐ Full Foxglove visualization integration
 - [x] Modular YAML configuration system
 - [x] Real-time drive logging and telemetry
-- [ ] Real time Annotations Overlay in Foxglove
+- [ ] 🔥 Real time Annotations Overlay in Foxglove
 
 ### README To-Dos
-- [ ] Add demo images and videos to README
+- [ ] 🔥 Add demo images and videos to README
 - [ ] Add performance benchmarks section
 - [ ] Add Table of Contents for easier navigation
-  
+
+## Legend
+> 🔥 = High Priority
+
 > ⭐ = Complete but still being improved/tuned/changed (not final version)
 
 > 💤 = Minimal Priority, can be addressed later
+
+> 💤💤 = Very Low Priority, may not be implement
 
 ## Credits
 - Datasets: CU Lane, LISA, GTRSB, Mapillary, BDD100K
