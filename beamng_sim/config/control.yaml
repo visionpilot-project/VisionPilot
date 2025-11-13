@@ -10,6 +10,7 @@ control:
     Ki: 0.0
     Kd: 0.003
     derivative_filter_alpha: 0.2
+    feedforward: 0.05
   max_steering_change: 0.22
   base_throttle: 0.12
   target_speed_kph: 40

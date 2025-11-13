@@ -146,6 +146,7 @@ Configuration files are located in the `beamng_sim/config/` directory:
 
 ### Control & Planning
 - [x] ⭐ Integrate vehicle control (Throttle, Steering, Braking Implemented) (PID needs further tuning)
+- [ ] Integrate PIDF controller
 - [x] ⭐ Adaptive Cruise Control (Currently only basic Cruise Control implemented)
 - [ ] 🔥 Emergency Braking / Collision Avoidance
 - [ ] Blindspot Monitoring (Can easily be implemented with prebuilt Beamng ADAS module)
