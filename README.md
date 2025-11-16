@@ -20,7 +20,7 @@ Features robust training pipelines, modular sensor integration, multi-model infe
 
 ## Pure Sign Detection Demo
 
-This demo shows real-time traffic sign detection (no classification) in BeamNG.tech:
+This demo shows real-time traffic sign detection (no classification) on a video:
 
 ![Sign Detection Demo](images/traffic-sign-classification/sign_detection_demo.gif)
 
@@ -28,7 +28,7 @@ This demo shows real-time traffic sign detection (no classification) in BeamNG.t
 
 ## Traffic Light Detection & Classification Demo
 
-This demo shows real-time traffic light detection and classification in BeamNG.tech:
+This demo shows real-time traffic light detection and classification on a video:
 
 ![Traffic Light Detection & Classification Demo](images/traffic-lights/traffic_light_demo.gif)
 
@@ -59,7 +59,6 @@ The original demo is still available for reference:
 
 [Lane Keeping & Multi-Model Detection Demo (v1)](https://youtu.be/f9mHigMKME8)
 
-> More demo videos and visualizations will be added as features are completed.
 
 ## Foxglove Visualization Demo
 
@@ -74,6 +73,8 @@ This demo shows:
 - Foxglove Studio WebSocket integration
 - Autonomous vehicle simulation with BeamNG.tech
 - Modular Python pipeline for sensor fusion and control
+
+> More demo videos and visualizations will be added as features are completed.
 
 ## Features
 
@@ -180,8 +181,8 @@ Configuration files are located in the `beamng_sim/config/` directory:
 - [ ] 🔥 GPS/IMU sensor
 
 ### Control & Planning
-- [x] ⭐ Integrate vehicle control (Throttle, Steering, Braking Implemented) (PID needs further tuning)
-- [ ] Integrate PIDF controller
+- [x] Integrate vehicle control (Throttle, Steering, Braking Implemented) (PID needs further tuning)
+- [x] Integrate PIDF controller
 - [x] ⭐ Adaptive Cruise Control (Currently only basic Cruise Control implemented)
 - [ ] 🔥 Emergency Braking / Collision Avoidance
 - [ ] Blindspot Monitoring (Can easily be implemented with prebuilt Beamng ADAS module)
@@ -206,7 +207,7 @@ Configuration files are located in the `beamng_sim/config/` directory:
 - [ ] 🔥 Real time Annotations Overlay in Foxglove
 
 ### README To-Dos
-- [ ] 🔥 Add demo images and videos to README
+- [x] 🔥 Add demo images and videos to README
 - [ ] Add performance benchmarks section
 - [ ] Add Table of Contents for easier navigation
 
