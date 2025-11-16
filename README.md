@@ -18,26 +18,6 @@ A modular Python project for autonomous driving research and prototyping, fully 
 
 Features robust training pipelines, modular sensor integration, multi-model inference, and a flexible folder structure for easy experimentation and extension. The project is designed for research and prototyping in realistic driving environments using BeamNG.tech with professional-grade visualization through Foxglove.
 
-
-
-## Demos
-
-Below are sample demos of the system's capabilities. More demos (including new models and tasks) will be added as development progresses.
-
-| Lane Detection (CV) | Lane Detection (Neural Net) |
-|---------------------|----------------------------|
-| ![lane-cv](assets/lane_cv.gif) <br> *(coming soon)* | ![lane-nn](assets/lane_nn.gif) <br> *(coming soon)* |
-
-| Sign Detection/Classification | Traffic Light Detection/Classification |
-|------------------------------|---------------------------------------|
-| ![sign](assets/sign.gif) <br> *(detection & classification)* | ![light](assets/light.gif) <br> *(detection & classification)* |
-
-| Vehicle/Object/Pedestrian Detection | |
-|-------------------------------------|--|
-| ![vehicle](assets/vehicle.gif) <br> *(coming soon)* | |
-
-
-
 ## Foxglove Visualization Demo
 
 See real-time LiDAR point cloud streaming and autonomous vehicle telemetry in Foxglove Studio:
@@ -52,7 +32,26 @@ This demo shows:
 - Autonomous vehicle simulation with BeamNG.tech
 - Modular Python pipeline for sensor fusion and control
 
+
+
+## Lane Keeping & Multi-Model Detection Demo
+
+Watch a real-time demo of automatic lane detection and keeping in BeamNG.tech, with live SCNN and OpenCV lane detection, sign classification, and vehicle detection:
+
+[![Lane Keeping & Multi-Model Detection Demo](https://img.youtube.com/vi/f9mHigMKME8/0.jpg)](https://youtu.be/f9mHigMKME8)
+
+Watch on YouTube: [https://youtu.be/f9mHigMKME8](https://youtu.be/f9mHigMKME8)
+
+This demo shows:
+- Autonomous lane keeping (PID tuning in progress; some oscillation and curve handling issues)
+- Left of center: SCNN lane detection
+- Right of center: OpenCV lane detection
+- Top left: Traffic sign detection and classification
+- Bottom left: Vehicle and sign detection
+- Real-time visualization and multi-model inference
+
 > More demo videos and visualizations will be added as features are completed.
+
 
 ## Features
 
