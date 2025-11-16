@@ -7,8 +7,8 @@ control:
     Kf: 0.09
 
   max_steering_change: 0.22
-  base_throttle: 0.12
   target_speed_kph: 40
+  min_gap: 10.0
   speed_pid:
     Kp: 0.02
     Ki: 0.0

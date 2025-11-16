@@ -6,6 +6,36 @@
   </a>
 </p>
 
+## Table of Contents
+- [Self-Driving Car Simulation: Computer Vision, Deep Learning \& Real-Time Perception (BeamNG.tech)](#self-driving-car-simulation-computer-vision-deep-learning--real-time-perception-beamngtech)
+  - [Table of Contents](#table-of-contents)
+  - [Overview](#overview)
+  - [Demos](#demos)
+    - [Pure Sign Detection Demo](#pure-sign-detection-demo)
+  - [Traffic Light Detection \& Classification Demo](#traffic-light-detection--classification-demo)
+    - [Latest Lane Detection Demo (v2)](#latest-lane-detection-demo-v2)
+      - [Previous Lane Detection Demo (v1)](#previous-lane-detection-demo-v1)
+  - [Foxglove Visualization Demo](#foxglove-visualization-demo)
+  - [Features](#features)
+  - [Built With](#built-with)
+  - [Datasets Used](#datasets-used)
+  - [Quickstart \& Usage](#quickstart--usage)
+  - [Setup \& Installation](#setup--installation)
+  - [Model Details](#model-details)
+  - [Configuration Files](#configuration-files)
+  - [Roadmap](#roadmap)
+    - [Perception](#perception)
+    - [Sensor Fusion \& Calibration](#sensor-fusion--calibration)
+    - [Control \& Planning](#control--planning)
+    - [Simulation \& Scenarios](#simulation--scenarios)
+    - [Visualization \& Logging](#visualization--logging)
+    - [README To-Dos](#readme-to-dos)
+  - [Legend](#legend)
+  - [Credits](#credits)
+    - [BeamNG.tech Citation](#beamngtech-citation)
+
+## Overview
+
 A modular Python project for autonomous driving research and prototyping, fully integrated with the BeamNG.tech simulator and Foxglove visualization. This system combines traditional computer vision and state-of-the-art deep learning (CNN, U-Net, YOLO, SCNN) with real-time sensor fusion and autonomous vehicle control to tackle:
 
 - Lane detection (Traditional CV, SCNN, capable of city & highway scenarios)
@@ -18,7 +48,9 @@ A modular Python project for autonomous driving research and prototyping, fully 
 
 Features robust training pipelines, modular sensor integration, multi-model inference, and a flexible folder structure for easy experimentation and extension. The project is designed for research and prototyping in realistic driving environments using BeamNG.tech with professional-grade visualization through Foxglove.
 
-## Pure Sign Detection Demo
+## Demos
+
+### Pure Sign Detection Demo
 
 This demo shows real-time traffic sign detection (no classification) on a video:
 
@@ -164,6 +196,7 @@ Configuration files are located in the `beamng_sim/config/` directory:
 - [x] Advanced lane detection using OpenCV (robust city/highway, lighting, outlier handling)
 - [x] Integrate Majority Voting system for CV
 - [x] Camera Calibration
+- [ ] Handle dashed lines better in lane detection
 - [ ] Stop Sign Yield Sign Detection and Response (Will be implemented after improving sign classification accuracy; currently only warning is possible)
 - [ ] Detect multiple lanes
 - [ ] Lane Change Logic
@@ -209,7 +242,7 @@ Configuration files are located in the `beamng_sim/config/` directory:
 ### README To-Dos
 - [x] 🔥 Add demo images and videos to README
 - [ ] Add performance benchmarks section
-- [ ] Add Table of Contents for easier navigation
+- [x] Add Table of Contents for easier navigation
 
 ## Legend
 > 🔥 = High Priority

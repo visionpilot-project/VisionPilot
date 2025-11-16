@@ -1,9 +1,9 @@
 highway:
   map: "west_coast_usa"
-  scene: "SLAM_highway"
+  scene: "highway"
   vehicle: "etk800_highway"
 
 city:
   map: "west_coast_usa"
-  scene: "SLAM_city"
+  scene: "city"
   vehicle: "etk800_city"

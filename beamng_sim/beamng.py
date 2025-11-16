@@ -139,6 +139,7 @@ def load_config():
         
     return beamng_config, scenarios_config, sensors_config
 
+
 def sim_setup(scenario_name='highway'):
     """
     Setup BeamNG simulation, scenario, vehicle, spawn point and sensors.
@@ -173,7 +174,7 @@ def sim_setup(scenario_name='highway'):
     scenario.add_vehicle(vehicle, pos=tuple(vehicle_cfg['spawn_pos']), rot_quat=rot)
 
     scenario.make(beamng)
-    beamng.settings.set_deterministic(sim_cfg['deterministic_fps'])
+    beamng.settings.set_deterministic(60)
     beamng.scenario.load(scenario)
     beamng.scenario.start()
 
@@ -394,6 +395,7 @@ def main():
     with open(os.path.join(os.path.dirname(__file__), 'config/control.yaml'), 'r') as f:
         control_config = yaml.safe_load(f)
 
+    # Change scenario name between 'highway' and 'city' here
     beamng, scenario, vehicle, camera, lidar, radar = sim_setup(scenario_name='highway')
     print("Simulation setup complete")
 
@@ -427,7 +429,7 @@ def main():
     max_steering_change = control_cfg['max_steering_change']
     previous_steering = 0.0
 
-    base_throttle = control_cfg['base_throttle']
+    min_gap = control_cfg['min_gap']
     target_speed_kph = control_cfg['target_speed_kph']
     speed_pid = PIDController(
         Kp=control_cfg['speed_pid']['Kp'],

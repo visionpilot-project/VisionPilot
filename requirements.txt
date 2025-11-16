@@ -8,4 +8,4 @@ scikit-learn
 Pillow
 opencv-python
 tqdm
-beamngpy
+beamngpy==1.34.1
