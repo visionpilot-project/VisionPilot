@@ -18,6 +18,49 @@ A modular Python project for autonomous driving research and prototyping, fully 
 
 Features robust training pipelines, modular sensor integration, multi-model inference, and a flexible folder structure for easy experimentation and extension. The project is designed for research and prototyping in realistic driving environments using BeamNG.tech with professional-grade visualization through Foxglove.
 
+## Pure Sign Detection Demo
+
+This demo shows real-time traffic sign detection (no classification) in BeamNG.tech:
+
+![Sign Detection Demo](images/traffic-sign-classification/sign_detection_demo.gif)
+
+> Only detection is shown; classification is not included in this demo.
+
+## Traffic Light Detection & Classification Demo
+
+This demo shows real-time traffic light detection and classification in BeamNG.tech:
+
+![Traffic Light Detection & Classification Demo](images/traffic-lights/traffic_light_demo.gif)
+
+> Both detection and classification are shown in this demo.
+
+### Latest Lane Detection Demo (v2)
+
+Watch the improved autonomous lane keeping demo (v2) in BeamNG.tech, featuring smoother fused CV+SCNN lane detection, stable PID steering, and robust adaptive cruise control:
+
+[![Autonomous Lane Keeping v2 Demo](https://img.youtube.com/vi/7eA_XfIkLWQ/0.jpg)](https://www.youtube.com/watch?v=7eA_XfIkLWQ)
+
+Watch on YouTube: [https://www.youtube.com/watch?v=7eA_XfIkLWQ](https://www.youtube.com/watch?v=7eA_XfIkLWQ)
+
+This v2 demo shows:
+- Autonomous lane keeping with tuned PID steering (stable, minimal oscillation)
+- Fused CV & SCNN lane detection (smoother, more robust)
+- Adaptive cruise control (ACC) holding ~50 km/h
+- Handles shadows, bridges, and recovers from distractions
+- Real-time visualization and multi-model inference
+
+> Note: Very low-light (tunnel) scenarios are not yet supported.
+
+---
+
+#### Previous Lane Detection Demo (v1)
+
+The original demo is still available for reference:
+
+[Lane Keeping & Multi-Model Detection Demo (v1)](https://youtu.be/f9mHigMKME8)
+
+> More demo videos and visualizations will be added as features are completed.
+
 ## Foxglove Visualization Demo
 
 See real-time LiDAR point cloud streaming and autonomous vehicle telemetry in Foxglove Studio:
@@ -31,27 +74,6 @@ This demo shows:
 - Foxglove Studio WebSocket integration
 - Autonomous vehicle simulation with BeamNG.tech
 - Modular Python pipeline for sensor fusion and control
-
-
-
-## Lane Keeping & Multi-Model Detection Demo
-
-Watch a real-time demo of automatic lane detection and keeping in BeamNG.tech, with live SCNN and OpenCV lane detection, sign classification, and vehicle detection:
-
-[![Lane Keeping & Multi-Model Detection Demo](https://img.youtube.com/vi/f9mHigMKME8/0.jpg)](https://youtu.be/f9mHigMKME8)
-
-Watch on YouTube: [https://youtu.be/f9mHigMKME8](https://youtu.be/f9mHigMKME8)
-
-This demo shows:
-- Autonomous lane keeping (PID tuning in progress; some oscillation and curve handling issues)
-- Left of center: SCNN lane detection
-- Right of center: OpenCV lane detection
-- Top left: Traffic sign detection and classification
-- Bottom left: Vehicle and sign detection
-- Real-time visualization and multi-model inference
-
-> More demo videos and visualizations will be added as features are completed.
-
 
 ## Features
 

@@ -4,7 +4,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from beamng_sim.lane_detection.cv.thresholding import apply_thresholds_with_voting
 from beamng_sim.lane_detection.perspective import debug_perspective_live, get_src_points, perspective_warp
 from beamng_sim.lane_detection.cv.lane_finder import get_histogram, sliding_window_search
-from beamng_sim.lane_detection.metrics import calculate_curvature_and_deviation, process_deviation
+from beamng_sim.lane_detection.metrics import calculate_curvature_and_deviation
 from beamng_sim.lane_detection.visualization import draw_lane_overlay, add_text_overlay, create_mask_overlay
 from beamng_sim.lane_detection.unet.postprocess import process_unet_mask, run_unet_on_frame
 from beamng_sim.lane_detection.scnn.postprocess import run_scnn_on_frame
@@ -82,8 +82,6 @@ def process_frame_cv(img, speed=0, previous_steering=0, debug_display=False, per
 
         if metrics_result is None or (isinstance(metrics_result, tuple) and all(x is None for x in metrics_result)):
             left_curverad, right_curverad, deviation, lane_center, vehicle_center, lane_width = None, None, None, None, None, None
-            smoothed_deviation = 0.0
-            effective_deviation = 0.0
             print("Lane detection metrics calculation returned None values")
         else:
             if len(metrics_result) == 6:
@@ -93,7 +91,6 @@ def process_frame_cv(img, speed=0, previous_steering=0, debug_display=False, per
                 lane_width = None
             else:
                 left_curverad, right_curverad, deviation, lane_center, vehicle_center, lane_width = None, None, None, None, None, None
-            smoothed_deviation, effective_deviation = process_deviation(deviation)
 
         result = draw_lane_overlay(img, binary_warped, Minv, left_fitx, right_fitx, ploty, deviation)
         result = add_text_overlay(result, left_curverad, right_curverad, deviation, avg_brightness, speed, confidence=confidence)
@@ -102,8 +99,6 @@ def process_frame_cv(img, speed=0, previous_steering=0, debug_display=False, per
             'left_curverad': left_curverad,
             'right_curverad': right_curverad,
             'deviation': deviation,
-            'smoothed_deviation': smoothed_deviation,
-            'effective_deviation': effective_deviation,
             'lane_center': lane_center,
             'vehicle_center': vehicle_center,
             'lane_width': lane_width,
@@ -119,8 +114,6 @@ def process_frame_cv(img, speed=0, previous_steering=0, debug_display=False, per
             'left_curverad': 0,
             'right_curverad': 0,
             'deviation': 0,
-            'smoothed_deviation': 0,
-            'effective_deviation': 0,
             'lane_center': 0,
             'vehicle_center': 0,
             'lane_width': 0,
@@ -202,12 +195,9 @@ def process_frame_unet(img, model, speed=0, previous_steering=0, debug_display=F
 
         if metrics_result == (None, None, None, None, None, None):
             left_curverad, right_curverad, deviation, lane_center, vehicle_center, lane_width = None, None, None, None, None, None
-            smoothed_deviation = 0.0
-            effective_deviation = 0.0
             print("Lane detection metrics calculation returned None values")
         else:
             left_curverad, right_curverad, deviation, lane_center, vehicle_center, lane_width = metrics_result
-            smoothed_deviation, effective_deviation = process_deviation(deviation)
 
         result = draw_lane_overlay(img.copy(), binary_warped, Minv, left_fitx, right_fitx, ploty, deviation)
         
@@ -219,8 +209,6 @@ def process_frame_unet(img, model, speed=0, previous_steering=0, debug_display=F
             'left_curverad': left_curverad,
             'right_curverad': right_curverad,
             'deviation': deviation,
-            'smoothed_deviation': smoothed_deviation,
-            'effective_deviation': effective_deviation,
             'lane_center': lane_center,
             'vehicle_center': vehicle_center,
             'lane_width': lane_width,
@@ -236,8 +224,6 @@ def process_frame_unet(img, model, speed=0, previous_steering=0, debug_display=F
             'left_curverad': 0,
             'right_curverad': 0,
             'deviation': 0,
-            'smoothed_deviation': 0,
-            'effective_deviation': 0,
             'lane_center': 0,
             'vehicle_center': 0,
             'lane_width': 0,
@@ -330,12 +316,9 @@ def process_frame_scnn(img, model, device='cpu', speed=0, previous_steering=0, d
         
         if metrics_result == (None, None, None, None, None, None):
             left_curverad, right_curverad, deviation, lane_center, vehicle_center, lane_width = None, None, None, None, None, None
-            smoothed_deviation = 0.0
-            effective_deviation = 0.0
             print("Lane detection metrics calculation returned None values (SCNN)")
         else:
             left_curverad, right_curverad, deviation, lane_center, vehicle_center, lane_width = metrics_result
-            smoothed_deviation, effective_deviation = process_deviation(deviation)
         
         # Draw results
         result = draw_lane_overlay(img.copy(), binary_warped, Minv, left_fitx, right_fitx, ploty, deviation)
@@ -351,8 +334,6 @@ def process_frame_scnn(img, model, device='cpu', speed=0, previous_steering=0, d
             'left_curverad': left_curverad,
             'right_curverad': right_curverad,
             'deviation': deviation,
-            'smoothed_deviation': smoothed_deviation,
-            'effective_deviation': effective_deviation,
             'lane_center': lane_center,
             'vehicle_center': vehicle_center,
             'lane_width': lane_width,
@@ -372,8 +353,6 @@ def process_frame_scnn(img, model, device='cpu', speed=0, previous_steering=0, d
             'left_curverad': 0,
             'right_curverad': 0,
             'deviation': 0,
-            'smoothed_deviation': 0,
-            'effective_deviation': 0,
             'lane_center': 0,
             'vehicle_center': 0,
             'lane_width': 0,

@@ -18,13 +18,6 @@ def process_frame(lidar_sensor, beamng, speed, debug_window=None, vehicle=None, 
             print("Warning: Empty LiDAR point cloud")
             return {}, []
 
-        car_yaw = None
-        if car_direction is not None:
-            car_yaw = np.arctan2(car_direction[1], car_direction[0])
-            print(f"Car direction: {car_direction}, Car yaw: {np.degrees(car_yaw):.1f} degrees")
-
-        # Passthrough filtering temporarily disabled
-        # ...existing code...
         filtered_points = point_cloud
         print(f"Bypassing passthrough: {len(filtered_points)} points (from {len(point_cloud)})")
 
@@ -36,7 +29,7 @@ def process_frame(lidar_sensor, beamng, speed, debug_window=None, vehicle=None, 
             return {}, []
 
         # TEMPORARY: Bypass boundary detection and just return raw points for faster streaming
-        print(f"Returning {len(filtered_points)} raw LiDAR points (boundary detection bypassed)")
+        print(f"Returning {len(filtered_points)} raw LiDAR points")
         return {}, filtered_points
     except Exception as e:
         print(f"LiDAR processing error: {e}")

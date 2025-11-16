@@ -77,31 +77,21 @@ def add_text_overlay(image, left_curverad, right_curverad, deviation, avg_bright
 
     fontType = cv2.FONT_HERSHEY_SIMPLEX
     
-    if left_curverad is None or right_curverad is None:
-        curvature_text = "Curvature: N/A"
-    else:
-        curvature_text = f"Curvature: L={left_curverad:.1f}m, R={right_curverad:.1f}m"
-    
     if deviation is None:
         deviation_text = "Deviation: N/A"
     else:
         direction = '+' if deviation > 0 else '-'
         deviation_text = f"Deviation: {direction}{abs(deviation):.2f}m"
     
-    cv2.putText(image, curvature_text, (30, 60), fontType, 1.2, (255, 255, 255), 1)
-    cv2.putText(image, deviation_text, (30, 110), fontType, 1.2, (255, 255, 255), 1)
+    cv2.putText(image, deviation_text, (30, 50), fontType, 0.6, (0, 0, 0), 1)
 
-    cv2.putText(image, f"Avg Brightness: {avg_brightness:.1f}", (30, 160), fontType, 1.2, (255, 255, 255), 1)
+    cv2.putText(image, f"Avg Brightness: {avg_brightness:.1f}", (30, 80), fontType, 0.6, (0, 0, 0), 1)
 
     if confidence is not None:
-        cv2.putText(image, f"Confidence: {confidence:.2f}", (30, 210), fontType, 1.2, (255, 255, 255), 1)
+        cv2.putText(image, f"Confidence: {confidence:.2f}", (30, 110), fontType, 0.6, (0, 0, 0), 1)
     else:
-        cv2.putText(image, "Confidence: N/A", (30, 210), fontType, 1.2, (255, 255, 255), 1)
+        cv2.putText(image, "Confidence: N/A", (30, 110), fontType, 0.6, (0, 0, 0), 1)
 
-    if speed is not None:
-        cv2.putText(image, f"Speed: {speed:.1f} kph", (30, 260), fontType, 1.2, (255, 255, 255), 1)
-    else:
-        cv2.putText(image, "Speed: N/A", (30, 260), fontType, 1.2, (255, 255, 255), 1)
     
     return image
 

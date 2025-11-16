@@ -100,8 +100,9 @@ def check_lane_width_outliers(lane_width_pix):
         
     if len(lane_width_history) >= 15:
         avg_lane_width = np.mean(lane_width_history)
-        max_lane_width = avg_lane_width * 1.15
-        min_lane_width = avg_lane_width * 0.85
+        # Tighter tolerance: only allow 10% variation instead of 15%
+        max_lane_width = avg_lane_width * 1.10
+        min_lane_width = avg_lane_width * 0.90
         if lane_width_pix < min_lane_width or lane_width_pix > max_lane_width:
             check_lane_width_outliers.outlier_count += 1
             print(f"Lane width outlier: {lane_width_pix:.1f} pixels (avg={avg_lane_width:.1f}), grace count: {check_lane_width_outliers.outlier_count}")
@@ -193,9 +194,13 @@ def calculate_curvature_and_deviation(ploty, left_fitx, right_fitx, binary_warpe
         
         deviation_pixels = vehicle_center - lane_center
         deviation_m = deviation_pixels * xm_per_pix
+        
+        # print(f"DEBUG: vehicle_center={vehicle_center:.1f}px, lane_center={lane_center:.1f}px, deviation_pixels={deviation_pixels:.1f}px")
+        # print(f"DEBUG: xm_per_pix={xm_per_pix:.4f}, lane_width_pix={lane_width_pix:.1f}px")
+        # print(f"DEBUG: deviation_m={deviation_m:.3f}m")
 
         # Limit unreasonable deviation values
-        max_reasonable_deviation = 0.7
+        max_reasonable_deviation = 1.0
         if abs(deviation_m) > max_reasonable_deviation:
             print(f"Unreasonable deviation detected: {deviation_m:.2f}m, clipping to {max_reasonable_deviation:.2f}m")
             deviation_m = np.clip(deviation_m, -max_reasonable_deviation, max_reasonable_deviation)
@@ -207,10 +212,10 @@ def calculate_curvature_and_deviation(ploty, left_fitx, right_fitx, binary_warpe
         return None, None, None, None, None, None
 
 
-def process_deviation(raw_deviation, alpha=0.52, dead_zone=0.1, max_dev=2.0):
+def process_deviation(raw_deviation, alpha=0.45, dead_zone=0.10, max_dev=2.0):
     """
     Process raw deviation for use in control systems.
-    Applies smoothing, deadzone, and scaling.
+    Applies deadzone/scaling FIRST, then smoothing.
     
     Args:
         raw_deviation: Raw deviation value from lane detection
@@ -223,8 +228,16 @@ def process_deviation(raw_deviation, alpha=0.52, dead_zone=0.1, max_dev=2.0):
     """
     if raw_deviation is None:
         raw_deviation = 0.0
-        
-    smoothed_deviation = smooth_deviation(raw_deviation, alpha)
-    effective_deviation = apply_deviation_deadzone_and_scaling(smoothed_deviation, dead_zone, max_dev)
+    
+    if not hasattr(process_deviation, 'previous_smoothed_deviation'):
+        process_deviation.previous_smoothed_deviation = 0.0
+    
+    # Apply deadzone and scaling FIRST to the raw deviation
+    effective_deviation = apply_deviation_deadzone_and_scaling(raw_deviation, dead_zone, max_dev)
+    
+    # Then smooth the effective deviation
+    smoothed_deviation = smooth_deviation(effective_deviation, alpha)
+    
+    process_deviation.previous_smoothed_deviation = smoothed_deviation
     
     return smoothed_deviation, effective_deviation

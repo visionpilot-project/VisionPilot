@@ -26,6 +26,12 @@ def sliding_window_search(binary_warped, histogram):
         sliding_window_search.last_lane_width = None
     if not hasattr(sliding_window_search, 'last_valid_lanes'):
         sliding_window_search.last_valid_lanes = None
+    if not hasattr(sliding_window_search, 'last_left_fitx'):
+        sliding_window_search.last_left_fitx = None
+    if not hasattr(sliding_window_search, 'last_right_fitx'):
+        sliding_window_search.last_right_fitx = None
+    if not hasattr(sliding_window_search, 'frame_skip_count'):
+        sliding_window_search.frame_skip_count = 0
     
     midpoint = int(histogram.shape[0]/2)
     leftx_base = np.argmax(histogram[:midpoint])
@@ -42,6 +48,10 @@ def sliding_window_search(binary_warped, histogram):
     minpix = 50
     left_lane_inds = []
     right_lane_inds = []
+    
+    # Track pixel counts and positions for quality assessment
+    left_pixel_count = 0
+    right_pixel_count = 0
     
     out_img = np.dstack((binary_warped, binary_warped, binary_warped)) * 255
     out_img = np.clip(out_img, 0, 255).astype(np.uint8)
@@ -101,6 +111,15 @@ def sliding_window_search(binary_warped, histogram):
     lefty = nonzeroy[left_lane_inds] 
     rightx = nonzerox[right_lane_inds]
     righty = nonzeroy[right_lane_inds]
+    
+    # Quality check: require sufficient pixels for both lanes
+    min_pixels_required = 200
+    if len(leftx) < min_pixels_required or len(rightx) < min_pixels_required:
+        print(f"Insufficient lane pixels: left={len(leftx)}, right={len(rightx)}")
+        if sliding_window_search.last_valid_lanes is not None:
+            ploty, left_fit, right_fit, left_fitx, right_fitx = sliding_window_search.last_valid_lanes
+            print("Using last valid detection due to insufficient pixels")
+            return ploty, left_fit, right_fit, left_fitx, right_fitx
     
     if len(leftx) > 0 and len(rightx) > 0:
         left_mean_x = np.mean(leftx)
@@ -197,9 +216,11 @@ def sliding_window_search(binary_warped, histogram):
         else:
             lane_center = (left_fitx[-1] + right_fitx[-1]) / 2.0
             if sliding_window_search.last_lane_center is not None:
-                if abs(lane_center - sliding_window_search.last_lane_center) > 100:
+                # max 80 pixel jump instead of 100
+                max_center_shift = 80
+                if abs(lane_center - sliding_window_search.last_lane_center) > max_center_shift:
                     use_history = True
-                    print(f"Sudden lane center jump ({lane_center:.1f} vs {sliding_window_search.last_lane_center:.1f}), using history")
+                    print(f"Sudden lane center jump ({lane_center:.1f} vs {sliding_window_search.last_lane_center:.1f}), max allowed: {max_center_shift}, using history")
 
             if (lane_width_check is not None and sliding_window_search.last_lane_width is not None and
                 isinstance(lane_width_check, (int, float)) and isinstance(sliding_window_search.last_lane_width, (int, float))):

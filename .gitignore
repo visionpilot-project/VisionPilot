@@ -28,3 +28,4 @@ notebooks/
 lane-detection-cnn/unet/lane_detection_unet.py
 
 beamng_sim/debug_output/
+beamng_sim/beamngpy_examplefiles/

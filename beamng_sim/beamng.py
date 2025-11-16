@@ -270,19 +270,20 @@ def get_vehicle_speed(vehicle):
 
     if 'pos' in vehicle.state:
         position = vehicle.state['pos']
-        print(f"Vehicle position: x={position[0]:.2f}, y={position[1]:.2f}, z={position[2]:.2f}")
     else:
         print("Vehicle position not available")
         position = None
 
     if 'dir' in vehicle.state:
         direction = vehicle.state['dir']
-        print(f"Vehicle direction: x={direction[0]:.2f}, y={direction[1]:.2f}, z={direction[2]:.2f}")
+    else:
+        print("Vehicle direction not available")
+        direction = None
 
     return speed_mps, speed_kph, position, direction
 
 
-def lane_detection_fused(img, speed_kph, pid, previous_steering, base_throttle, max_steering_change, step_i):
+def lane_detection_fused(img, speed_kph, previous_steering, step_i):
 
     # Use static variables to store last SCNN result/metrics/confidence
     if not hasattr(lane_detection_fused, "scnn_cache"):
@@ -322,28 +323,14 @@ def lane_detection_fused(img, speed_kph, pid, previous_steering, base_throttle, 
 
     fused_metrics = fuse_lane_metrics(cv_metrics, cv_conf, scnn_metrics, scnn_conf, method_name="SCNN")
 
-    cv2.imshow('Lane Detection CV', cv_result)
-    cv2.imshow('Lane Detection SCNN', scnn_result)
-
-
-    deviation = fused_metrics.get('deviation', 0.0)
-    smoothed_deviation = fused_metrics.get('smoothed_deviation', 0.0)
-    effective_deviation = fused_metrics.get('effective_deviation', 0.0)
-    lane_center = fused_metrics.get('lane_center', 0.0)
-    vehicle_center = fused_metrics.get('vehicle_center', 0.0)
-
-    steering = pid.update(-effective_deviation, 0.01)
-    steering = np.clip(steering, -1.0, 1.0)
-    steering_change = steering - previous_steering
-    if abs(steering_change) > max_steering_change:
-        steering = previous_steering + np.sign(steering_change) * max_steering_change
-
-    throttle = base_throttle * (1.0 - 0.3 * abs(steering))
-    throttle = np.clip(throttle, 0.05, 0.3)
+    cv_result_rgb = cv2.cvtColor(cv_result, cv2.COLOR_BGR2RGB)
+    scnn_result_rgb = cv2.cvtColor(scnn_result, cv2.COLOR_BGR2RGB)
+    cv2.imshow('Lane Detection CV', cv_result_rgb)
+    cv2.imshow('Lane Detection SCNN', scnn_result_rgb)
 
     result = cv_result if cv_conf > scnn_conf else scnn_result
 
-    return result, steering, throttle, smoothed_deviation, lane_center, vehicle_center, fused_metrics
+    return result, fused_metrics
 
 def sign_detection_classification(img):
     """
@@ -496,12 +483,28 @@ def main():
 
             # Lane Detection
             try:
-                result, steering, throttle, deviation, lane_center, vehicle_center, fused_metrics = lane_detection_fused(
-                    img, speed_kph, steering_pid, previous_steering, base_throttle, max_steering_change, step_i=step_i
+                result, fused_metrics = lane_detection_fused(
+                    img, speed_kph, previous_steering, step_i=step_i
                 )
             except Exception as lane_e:
                 print(f"Lane detection error: {lane_e}")
                 continue
+
+            deviation = fused_metrics.get('deviation', 0.0)
+            smoothed_deviation = fused_metrics.get('smoothed_deviation', 0.0)
+            effective_deviation = fused_metrics.get('effective_deviation', 0.0)
+            lane_center = fused_metrics.get('lane_center', 0.0)
+            vehicle_center = fused_metrics.get('vehicle_center', 0.0)
+
+            steering = steering_pid.update(-effective_deviation, dt)
+            steering = np.clip(steering, -1.0, 1.0)
+            steering_change = steering - previous_steering
+            if abs(steering_change) > max_steering_change:
+                steering = previous_steering + np.sign(steering_change) * max_steering_change
+
+            throttle = cruise_control(target_speed_kph, speed_kph, speed_pid, dt)
+            throttle = throttle * (1.0 - 0.3 * abs(steering))
+            throttle = np.clip(throttle, 0.05, 0.3)
 
             # Log to CSV
             fused_confidence = fused_metrics.get('confidence', 0.0)
@@ -599,7 +602,6 @@ def main():
                         for p in lidar_lane_boundaries['right_lane_points']
                     ]
                 bridge.lane_channel.log(lane_message)
-                print(f"Lane detection sent to Foxglove: deviation={deviation:.2f}")
                 
                 # Send lane paths
                 try:

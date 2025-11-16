@@ -16,10 +16,5 @@ def collect_lidar_data(beamng, lidar_data):
     readings_data = lidar_data
     
     point_cloud = readings_data.get("pointCloud", [])
-    
-    if isinstance(point_cloud, np.ndarray):
-        print(f"Point cloud is numpy array with shape: {point_cloud.shape}")
-    else:
-        print(f"Point cloud type: {type(point_cloud)}, length: {len(point_cloud) if hasattr(point_cloud, '__len__') else 'N/A'}")
 
     return point_cloud
