@@ -11,11 +11,11 @@
   - [Table of Contents](#table-of-contents)
   - [Overview](#overview)
   - [Demos](#demos)
-    - [Pure Sign Detection Demo](#pure-sign-detection-demo)
-    - [Traffic Light Detection \& Classification Demo](#traffic-light-detection--classification-demo)
+    - [Pure Sign Detection & Detection and classification of vehicles and pedestrians Demo](#pure-sign-detection-demo)
+  - [Traffic Light Detection \& Classification Demo](#traffic-light-detection--classification-demo)
     - [Latest Lane Detection Demo (v2)](#latest-lane-detection-demo-v2)
       - [Previous Lane Detection Demo (v1)](#previous-lane-detection-demo-v1)
-    - [Foxglove Visualization Demo](#foxglove-visualization-demo)
+  - [Foxglove Visualization Demo](#foxglove-visualization-demo)
   - [Features](#features)
   - [Built With](#built-with)
   - [Datasets Used](#datasets-used)
@@ -31,8 +31,9 @@
     - [Visualization \& Logging](#visualization--logging)
     - [README To-Dos](#readme-to-dos)
   - [Legend](#legend)
+  - [Engineering Journal](#engineering-journal)
   - [Credits](#credits)
-    - [BeamNG.tech Citation](#beamngtech-citation)
+  - [BeamNG.tech Citation](#beamngtech-citation)
 
 ## Overview
 
@@ -50,11 +51,11 @@ Features robust training pipelines, modular sensor integration, multi-model infe
 
 ## Demos
 
-### Pure Sign Detection Demo
+### Pure Sign Detection & Detection and classification of vehicles and pedestrians Demo
 
-This demo shows real-time traffic sign detection (no classification) on a video:
+This demo shows real-time traffic sign detection (no classification) as well as vehicle and pedestrian on a video:
 
-![Sign Detection Demo](images/traffic-sign-classification/sign_detection_demo.gif)
+![Sign Detection Demo & Vehicle Pedestrian](images/traffic-sign-classification/sign_detection_demo.gif)
 
 > Only detection is shown; classification is not included in this demo.
 
@@ -139,6 +140,7 @@ This demo shows:
 - **DLDT / LISA** for traffic light classification & detection
 - **Mapillary** for sign detection
 - **BDD** for vehicle and pedestrian detection
+- **TUSimple** for SCNN lane detection
 
 ## Quickstart & Usage
 
@@ -253,11 +255,18 @@ Configuration files are located in the `beamng_sim/config/` directory:
 
 > 💤💤 = Very Low Priority, may not be implement
 
+## Engineering Journal
+
+You can access the periodically updated engineering journal here:
+
+[Engineering Journal (Google Drive)](https://drive.google.com/file/d/15garXT9LaYUK_GlcT68EEbLpoLRc_XoL/view?usp=share_link)
+
 ## Credits
 - Datasets: CU Lane, LISA, GTRSB, Mapillary, BDD100K
 - Models: Ultralytics YOLOv8, custom CNNs
 - Simulation: BeamNG.tech ([BeamNG GmbH](https://www.beamng.tech/))
 - Special thanks to [Kaggle](https://www.kaggle.com/) for providing free GPU resources for model training without them it would've been imposible to train such good models.
+- I would also like to thank my teacher and supervisor Mr. Pratt for their guidance and support throughout this project.
 
 ### BeamNG.tech Citation
 
