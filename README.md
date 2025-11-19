@@ -1,21 +1,25 @@
-# Self-Driving Car Simulation: Computer Vision, Deep Learning & Real-Time Perception (BeamNG.tech)
-
 <p align="center">
+  <img src="images/banner.png" alt="VisionPilot Banner" height="100" />
+</p>
+
+# VisionPilot: Autonomous Driving Simulation, Computer Vision & Real-Time Perception (BeamNG.tech)
+
+<p align="center" style="margin-bottom:0;">
   <a href="https://star-history.com/#Julian1777/self-driving-project&Date">
-    <img src="https://api.star-history.com/svg?repos=Julian1777/self-driving-project&type=Date" alt="Star History Chart" />
+    <img src="https://api.star-history.com/svg?repos=Julian1777/self-driving-project&type=Date" alt="Star History Chart" height="60" />
   </a>
 </p>
 
 ## Table of Contents
-- [Self-Driving Car Simulation: Computer Vision, Deep Learning \& Real-Time Perception (BeamNG.tech)](#self-driving-car-simulation-computer-vision-deep-learning--real-time-perception-beamngtech)
+- [VisionPilot: Autonomous Driving Simulation, Computer Vision \& Real-Time Perception (BeamNG.tech)](#visionpilot-autonomous-driving-simulation-computer-vision--real-time-perception-beamngtech)
   - [Table of Contents](#table-of-contents)
   - [Overview](#overview)
   - [Demos](#demos)
-    - [Pure Sign Detection & Detection and classification of vehicles and pedestrians Demo](#pure-sign-detection-demo)
-    - [Traffic Light Detection \& Classification Demo](#traffic-light-detection--classification-demo)
+    - [Pure Sign Detection \& Detection and classification of vehicles and pedestrians Demo](#pure-sign-detection--detection-and-classification-of-vehicles-and-pedestrians-demo)
+  - [Traffic Light Detection \& Classification Demo](#traffic-light-detection--classification-demo)
     - [Latest Lane Detection Demo (v2)](#latest-lane-detection-demo-v2)
       - [Previous Lane Detection Demo (v1)](#previous-lane-detection-demo-v1)
-    - [Foxglove Visualization Demo](#foxglove-visualization-demo)
+  - [Foxglove Visualization Demo](#foxglove-visualization-demo)
   - [Features](#features)
   - [Built With](#built-with)
   - [Datasets Used](#datasets-used)
@@ -33,21 +37,19 @@
   - [Legend](#legend)
   - [Engineering Journal](#engineering-journal)
   - [Credits](#credits)
-  - [BeamNG.tech Citation](#beamngtech-citation)
+    - [BeamNG.tech Citation](#beamngtech-citation)
 
 ## Overview
 
 A modular Python project for autonomous driving research and prototyping, fully integrated with the BeamNG.tech simulator and Foxglove visualization. This system combines traditional computer vision and state-of-the-art deep learning (CNN, U-Net, YOLO, SCNN) with real-time sensor fusion and autonomous vehicle control to tackle:
 
-- Lane detection (Traditional CV, SCNN, capable of city & highway scenarios)
+- Lane detection (Traditional CV, SCNN, capable of highway scenarios)
 - Traffic sign classification & detection (CNN, YOLOv8)
 - Traffic light detection & classification (YOLOv8, CV, CNN)
 - Vehicle & pedestrian detection and recognition (YOLOv8)
 - Multi-sensor fusion (Camera, LiDAR, Radar)
 - Multi-model inference, real-time simulation, autonomous driving with PID control (BeamNG.tech)
 - Real-time visualization and monitoring (Foxglove WebSocket)
-
-Features robust training pipelines, modular sensor integration, multi-model inference, and a flexible folder structure for easy experimentation and extension. The project is designed for research and prototyping in realistic driving environments using BeamNG.tech with professional-grade visualization through Foxglove.
 
 ## Demos
 
@@ -121,7 +123,6 @@ This demo shows:
 - Real-time visualization via Foxglove WebSocket
 - Modular configuration system (YAML-based)
 - Drive logging and telemetry
-- Support for multiple scenarios (highway, city)
 
 
 ## Built With
@@ -192,12 +193,14 @@ Configuration files are located in the `beamng_sim/config/` directory:
 ## Roadmap
 
 ### Perception
-- [x] Sign classification & Detection (CNN / YOLOv8)
+- [x] ⭐ Sign classification & Detection (CNN / YOLOv8) (Needs Improvement in accuracy)
 - [x] Traffic light classification & Detection (CNN / YOLOv8)
 - [x] Lane detection Fusion (SCNN / CV)
-- [x] Advanced lane detection using OpenCV (robust city/highway, lighting, outlier handling)
+- [x] Advanced lane detection using OpenCV (robust highway, lighting, outlier handling)
 - [x] Integrate Majority Voting system for CV
 - [x] Camera Calibration
+- [ ] Blind Spot Monitoring
+- [ ] Real-Time Object Tracking
 - [ ] Handle dashed lines better in lane detection
 - [ ] Stop Sign Yield Sign Detection and Response (Will be implemented after improving sign classification accuracy; currently only warning is possible)
 - [ ] Detect multiple lanes
@@ -207,10 +210,10 @@ Configuration files are located in the `beamng_sim/config/` directory:
 
 ### Sensor Fusion & Calibration
 - [x] ⭐ Integrate Radar
+- [ ] Multi radar integration (1 front, 2 rear on each side)
 - [x] Integrate Lidar
-- [ ] 🔥 Sensor Calibration Routines
+- [ ] Ultrasonic Sensor Integration
 - [ ] 🔥 Lidar Object Detection
-- [ ] ~~💤 Lidar lane boundary detection~~ (Too performance heavy for a feature already well covered by lane-detection)
 - [ ] Map Matching algorithm
 - [ ] 💤 💤 SLAM (simultaneous localization and mapping)
 - [ ] 🔥 GPS/IMU sensor
@@ -223,7 +226,7 @@ Configuration files are located in the `beamng_sim/config/` directory:
 - [ ] Blindspot Monitoring (Can easily be implemented with prebuilt Beamng ADAS module)
 - [ ] Path planning
 - [ ] 💤 Behaviour planning and anticipation
-- [ ] 💤💤 End-to-end driving policy learning (RL, imitation learning)
+- [ ] 💤 End-to-end driving policy learning (RL, imitation learning)
 - [ ] 💤💤 Advanced traffic participant prediction (trajectory, intent)
 
 ### Simulation & Scenarios
