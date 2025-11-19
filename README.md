@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="images/banner.png" alt="VisionPilot Banner" height="100" />
+  <img src="images/banner.png" alt="VisionPilot Banner" height="200" />
 </p>
 
 # VisionPilot: Autonomous Driving Simulation, Computer Vision & Real-Time Perception (BeamNG.tech)
 
 <p align="center" style="margin-bottom:0;">
   <a href="https://star-history.com/#Julian1777/self-driving-project&Date">
-    <img src="https://api.star-history.com/svg?repos=Julian1777/self-driving-project&type=Date" alt="Star History Chart" height="60" />
+    <img src="https://api.star-history.com/svg?repos=Julian1777/self-driving-project&type=Date" alt="Star History Chart" height="300" />
   </a>
 </p>
 
