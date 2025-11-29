@@ -18,13 +18,13 @@ import numpy as np
 import cv2
 
 
-def process_frame_cv(img, speed=0, previous_steering=0, debug_display=False, perspective_debug_display=False, calibration_data=None):
+def process_frame_cv(img, speed=0, previous_steering=0, debug_display=False, perspective_debug_display=False, calibration_data=None, vehicle_model='q8_andronisk'):
         
     previous_fit = None
     confidence = 0.0
     try:
 
-        src_points = get_src_points(img.shape, speed, previous_steering)
+        src_points = get_src_points(img.shape, speed, previous_steering, vehicle_model=vehicle_model, calibration_data=calibration_data)
 
         # Apply thresholding to FULL image
         binary_image, avg_brightness = apply_thresholds_with_voting(
@@ -42,10 +42,10 @@ def process_frame_cv(img, speed=0, previous_steering=0, debug_display=False, per
         cv2.fillPoly(mask, [src_poly], 1)
         binary_image = binary_image * mask
         
-        binary_warped, Minv = perspective_warp(binary_image, speed=speed, calibration_data=calibration_data)
+        binary_warped, Minv = perspective_warp(binary_image, speed=speed, calibration_data=calibration_data, vehicle_model=vehicle_model)
         
         if perspective_debug_display:
-            debug_perspective_live(img, speed, previous_steering=0)
+            debug_perspective_live(img, speed, previous_steering=0, vehicle_model=vehicle_model, calibration_data=calibration_data)
         
         if debug_display:
             warped_display = np.dstack((binary_warped, binary_warped, binary_warped)) * 255
@@ -122,7 +122,7 @@ def process_frame_cv(img, speed=0, previous_steering=0, debug_display=False, per
         }
         return result, metrics, confidence
     
-def process_frame_unet(img, model, speed=0, previous_steering=0, debug_display=False, calibration_data=None):
+def process_frame_unet(img, model, speed=0, previous_steering=0, debug_display=False, calibration_data=None, vehicle_model='q8_andronisk'):
         
     previous_fit = None
     confidence = 0.0
@@ -133,7 +133,7 @@ def process_frame_unet(img, model, speed=0, previous_steering=0, debug_display=F
             display_raw_mask = cv2.resize(raw_mask * 255, (img.shape[1], img.shape[0]))
             cv2.imshow('Raw UNet Prediction', display_raw_mask)
         
-        src_points = get_src_points(img.shape, speed, previous_steering)
+        src_points = get_src_points(img.shape, speed, previous_steering, vehicle_model=vehicle_model, calibration_data=calibration_data)
         
         scale_x = raw_mask.shape[1] / img.shape[1]  # 320 / original_width
         scale_y = raw_mask.shape[0] / img.shape[0]  # 256 / original_height
@@ -158,7 +158,7 @@ def process_frame_unet(img, model, speed=0, previous_steering=0, debug_display=F
             cv2.imshow('Debug: Mask with Scaled Points', debug_mask_with_points)
         resized_mask = cv2.resize(mask, (img.shape[1], img.shape[0]))
         
-        binary_warped, Minv = perspective_warp(resized_mask, speed=speed, calibration_data=calibration_data)
+        binary_warped, Minv = perspective_warp(resized_mask, speed=speed, calibration_data=calibration_data, vehicle_model=vehicle_model)
         
         if debug_display:
             warped_display = np.dstack((binary_warped, binary_warped, binary_warped)) * 255
@@ -232,7 +232,7 @@ def process_frame_unet(img, model, speed=0, previous_steering=0, debug_display=F
         }
         return result, metrics, confidence
 
-def process_frame_scnn(img, model, device='cpu', speed=0, previous_steering=0, debug_display=False, calibration_data=None):
+def process_frame_scnn(img, model, device='cpu', speed=0, previous_steering=0, debug_display=False, calibration_data=None, vehicle_model='q8_andronisk'):
     """
     Process frame using SCNN model for lane detection
     
@@ -244,6 +244,7 @@ def process_frame_scnn(img, model, device='cpu', speed=0, previous_steering=0, d
         previous_steering: Previous steering angle
         debug_display: Whether to show debug windows
         calibration_data: Camera calibration data
+        vehicle_model: Vehicle model for perspective transform
         
     Returns:
         tuple: (result_image, metrics_dict, confidence)
@@ -266,7 +267,7 @@ def process_frame_scnn(img, model, device='cpu', speed=0, previous_steering=0, d
         resized_mask = cv2.resize(raw_mask, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_LINEAR)
         
         # Apply perspective warp to get bird's eye view
-        binary_warped, Minv = perspective_warp(resized_mask, speed=speed, calibration_data=calibration_data)
+        binary_warped, Minv = perspective_warp(resized_mask, speed=speed, calibration_data=calibration_data, vehicle_model=vehicle_model)
         
         if debug_display:
             warped_display = np.dstack((binary_warped, binary_warped, binary_warped)) * 255

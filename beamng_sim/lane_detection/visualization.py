@@ -83,14 +83,14 @@ def add_text_overlay(image, left_curverad, right_curverad, deviation, avg_bright
         direction = '+' if deviation > 0 else '-'
         deviation_text = f"Deviation: {direction}{abs(deviation):.2f}m"
     
-    cv2.putText(image, deviation_text, (30, 50), fontType, 0.6, (0, 0, 0), 1)
+    cv2.putText(image, deviation_text, (30, 50), fontType, 0.4, (0, 0, 0), 1)
 
-    cv2.putText(image, f"Avg Brightness: {avg_brightness:.1f}", (30, 80), fontType, 0.6, (0, 0, 0), 1)
+    cv2.putText(image, f"Avg Brightness: {avg_brightness:.1f}", (30, 80), fontType, 0.4, (0, 0, 0), 1)
 
     if confidence is not None:
-        cv2.putText(image, f"Confidence: {confidence:.2f}", (30, 110), fontType, 0.6, (0, 0, 0), 1)
+        cv2.putText(image, f"Confidence: {confidence:.2f}", (30, 110), fontType, 0.4, (0, 0, 0), 1)
     else:
-        cv2.putText(image, "Confidence: N/A", (30, 110), fontType, 0.6, (0, 0, 0), 1)
+        cv2.putText(image, "Confidence: N/A", (30, 110), fontType, 0.4, (0, 0, 0), 1)
 
     
     return image

@@ -14,8 +14,9 @@ vehicles:
 
   q8_default_highway:
     name: "q8_egovehicle"
-    model: "rsq8_600_tfsi"
+    model: "q8_andronisk"
     license: "JULIAN"
+    part_config: "main.pc"
     spawn_pos: [ -287.21, 73.609, 112.363 ]
     spawn_yaw: -135.678
 

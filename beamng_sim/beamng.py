@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from beamng_sim.utils.pid_controller import PIDController
 
 from beamngpy import BeamNGpy, Scenario, Vehicle
-from beamngpy.sensors import Camera, Lidar, Radar
+from beamngpy.sensors import Camera, Lidar, Radar, GPS, AdvancedIMU
 from foxglove.schemas import Color
 
 from beamng_sim.sign.detect_classify import random_brightness
@@ -21,8 +21,6 @@ import numpy as np
 import time
 import math
 import cv2
-import csv
-import datetime
 from scipy.spatial.transform import Rotation as R
 
 
@@ -34,7 +32,6 @@ from beamng_sim.lidar.main import process_frame as lidar_process_frame
 from beamng_sim.radar.main import process_frame as radar_process_frame
 
 from beamng_sim.lane_detection.fusion import fuse_lane_metrics
-from beamng_sim.lane_detection.perspective import load_calibration
 
 from beamng_sim.foxglove_integration.bridge_instance import bridge
 
@@ -78,8 +75,6 @@ def load_models():
     Load all the models into a global dictionary for use in detection or classification.
     This way models are only loaded once.
     """
-    global CAMERA_CALIBRATION
-    
     print("Loading models")
 
     # Sign detection model
@@ -115,14 +110,6 @@ def load_models():
     MODELS['lane_scnn'] = scnn_model
     MODELS['scnn_device'] = device
     print(f"Lane detection SCNN model loaded (device: {device})")
-    
-    # Load camera calibration
-    try:
-        CAMERA_CALIBRATION = load_calibration(str(CAMERA_CALIBRATION))
-        print("Camera calibration loaded successfully")
-    except Exception as e:
-        print(f"Warning: Failed to load camera calibration from {str(CAMERA_CALIBRATION)}: {e}")
-        CAMERA_CALIBRATION = None
     print("All models loaded successfully!")
 
 
@@ -140,11 +127,13 @@ def load_config():
     return beamng_config, scenarios_config, sensors_config
 
 
-def sim_setup(scenario_name='highway'):
+def sim_setup(scenario_name='highway', vehicle_name=None):
     """
     Setup BeamNG simulation, scenario, vehicle, spawn point and sensors.
     Args:
         scenario_name (str): Name of the scenario to load ('highway' or 'city')
+        vehicle_name (str): Name of the vehicle config to use (e.g., 'etk800_highway', 'q8_default_highway'). 
+                           If None, uses the vehicle from the scenario config.
     """
     # Load configurations
     beamng_config, scenarios_config, sensors_config = load_config()
@@ -161,13 +150,20 @@ def sim_setup(scenario_name='highway'):
     scenario_cfg = scenarios_config[scenario_name]
     scenario = Scenario(scenario_cfg['map'], scenario_cfg['scene'])
 
-    # Setup vehicle
-    vehicle_name = scenario_cfg['vehicle']
+    if vehicle_name is None:
+        vehicle_name = scenario_cfg['vehicle']
+    
     if vehicle_name not in beamng_config['vehicles']:
         raise ValueError(f"Vehicle '{vehicle_name}' not found in config")
     
     vehicle_cfg = beamng_config['vehicles'][vehicle_name]
-    vehicle = Vehicle(vehicle_cfg['name'], model=vehicle_cfg['model'], licence=vehicle_cfg['license'])
+    
+    vehicle = Vehicle(
+        vehicle_cfg['name'],
+        model=vehicle_cfg['model'],
+        licence=vehicle_cfg['license'],
+        part_config=vehicle_cfg['part_config']
+    )
 
     # Spawn vehicle
     rot = yaw_to_quat(vehicle_cfg['spawn_yaw'])
@@ -178,79 +174,160 @@ def sim_setup(scenario_name='highway'):
     beamng.scenario.load(scenario)
     beamng.scenario.start()
 
-    # Setup sensors
-    sensors = sensors_config['sensors']
-    camera = lidar = radar = None
+    # Setup sensors - select config based on vehicle model
+    vehicle_model = vehicle_cfg['model']
+    if vehicle_model not in sensors_config:
+        raise ValueError(f"Sensor configuration for vehicle model '{vehicle_model}' not found in config")
+    
+    sensors = sensors_config[vehicle_model]
+    cameras = {}
+    lidar = None
+    radars = {}
+    gps_sensors = {}
+    imus = {}
 
-    # Initialize camera if enabled
-    if sensors['camera']['enabled']:
-        try:
-            cam_cfg = sensors['camera']
-            camera = Camera(
-                cam_cfg['name'],
-                beamng,
-                vehicle,
-                requested_update_time=cam_cfg['requested_update_time'],
-                is_using_shared_memory=cam_cfg['is_using_shared_memory'],
-                pos=tuple(cam_cfg['pos']),
-                dir=tuple(cam_cfg['dir']),
-                field_of_view_y=cam_cfg['field_of_view_y'],
-                near_far_planes=tuple(cam_cfg['near_far_planes']),
-                resolution=tuple(cam_cfg['resolution']),
-                is_streaming=cam_cfg['is_streaming'],
-                is_render_colours=cam_cfg['is_render_colours'],
-            )
-            print("Camera initialized")
-        except Exception as e:
-            print(f"Camera initialization error: {e}")
+    # Initialize cameras - support multiple cameras (camera_front, camera_left, camera_right, etc.)
+    for sensor_key, sensor_cfg in sensors.items():
+        if sensor_key.startswith('camera_') and sensor_cfg.get('enabled', False):
+            try:
+                camera = Camera(
+                    sensor_cfg['name'],
+                    beamng,
+                    vehicle,
+                    requested_update_time=sensor_cfg['requested_update_time'],
+                    is_using_shared_memory=sensor_cfg.get('is_using_shared_memory', False),
+                    pos=tuple(sensor_cfg['pos']),
+                    dir=tuple(sensor_cfg['dir']),
+                    field_of_view_y=sensor_cfg['field_of_view_y'],
+                    near_far_planes=tuple(sensor_cfg['near_far_planes']),
+                    resolution=tuple(sensor_cfg['resolution']),
+                    is_streaming=sensor_cfg.get('is_streaming', False),
+                    is_render_colours=sensor_cfg.get('is_render_colours', True),
+                )
+                cameras[sensor_key] = camera
+                print(f"Camera '{sensor_key}' initialized")
+            except Exception as e:
+                print(f"Camera '{sensor_key}' initialization error: {e}")
+                cameras[sensor_key] = None
 
-    # Initialize LiDAR if enabled
-    if sensors['lidar']['enabled']:
-        try:
-            lidar_cfg = sensors['lidar']
-            lidar = Lidar(
-                lidar_cfg['name'],
-                beamng,
-                vehicle,
-                requested_update_time=lidar_cfg['requested_update_time'],
-                is_using_shared_memory=lidar_cfg['is_using_shared_memory'],
-                is_rotate_mode=lidar_cfg['is_rotate_mode'],
-                horizontal_angle=lidar_cfg['horizontal_angle'],
-                vertical_angle=lidar_cfg['vertical_angle'],
-                vertical_resolution=lidar_cfg['vertical_resolution'],
-                density=lidar_cfg['density'],
-                frequency=lidar_cfg['frequency'],
-                max_distance=lidar_cfg['max_distance'],
-                pos=tuple(lidar_cfg['pos']),
-                is_visualised=lidar_cfg['is_visualised'],
-            )
-            print("LiDAR initialized")
-        except Exception as e:
-            print(f"LiDAR initialization error: {e}")
+    # Initialize LiDAR - support multiple LiDARs (lidar_top, lidar_rear, etc.)
+    for sensor_key, sensor_cfg in sensors.items():
+        if sensor_key.startswith('lidar_') and sensor_cfg.get('enabled', False):
+            try:
+                lidar = Lidar(
+                    sensor_cfg['name'],
+                    beamng,
+                    vehicle,
+                    requested_update_time=sensor_cfg['requested_update_time'],
+                    is_using_shared_memory=sensor_cfg.get('is_using_shared_memory', False),
+                    is_rotate_mode=sensor_cfg.get('is_rotate_mode', False),
+                    horizontal_angle=sensor_cfg.get('horizontal_angle', 360),
+                    vertical_angle=sensor_cfg.get('vertical_angle', 26.9),
+                    vertical_resolution=sensor_cfg.get('vertical_resolution', 64),
+                    density=sensor_cfg.get('density', 1),
+                    frequency=sensor_cfg.get('frequency', 20),
+                    max_distance=sensor_cfg.get('max_distance', 120),
+                    pos=tuple(sensor_cfg['pos']),
+                    dir=tuple(sensor_cfg.get('dir', [0, -1, 0])),
+                    is_visualised=sensor_cfg.get('is_visualised', False),
+                )
+                print(f"LiDAR '{sensor_key}' initialized")
+                break  # Use first enabled LiDAR as primary
+            except Exception as e:
+                print(f"LiDAR '{sensor_key}' initialization error: {e}")
 
-    # Initialize Radar if enabled
-    if sensors['radar']['enabled']:
-        try:
-            print("Attempting Radar initialization...")
-            radar_cfg = sensors['radar']
-            radar = Radar(
-                radar_cfg['name'],
-                beamng,
-                vehicle,
-                requested_update_time=radar_cfg['requested_update_time'],
-                pos=tuple(radar_cfg['pos']),
-                dir=tuple(radar_cfg['dir']),
-                up=tuple(radar_cfg['up']),
-                size=tuple(radar_cfg['size']),
-                near_far_planes=tuple(radar_cfg['near_far_planes']),
-                field_of_view_y=radar_cfg['field_of_view_y'],
-            )
-            print("Radar initialized")
-        except Exception as e:
-            print(f"Radar initialization error: {e}")
-            radar = None
+    # Initialize Radars - support multiple radars (radar_front, radar_rear_left, radar_rear_right, etc.)
+    for sensor_key, sensor_cfg in sensors.items():
+        if sensor_key.startswith('radar_') and sensor_cfg.get('enabled', False):
+            try:
+                print(f"Attempting {sensor_key} initialization...")
+                radar = Radar(
+                    sensor_cfg['name'],
+                    beamng,
+                    vehicle,
+                    requested_update_time=sensor_cfg.get('requested_update_time', 0.05),
+                    pos=tuple(sensor_cfg['pos']),
+                    dir=tuple(sensor_cfg.get('dir', [0, -1, 0])),
+                    up=tuple(sensor_cfg.get('up', [0, 0, 1])),
+                    size=tuple(sensor_cfg.get('size', [200, 200])),
+                    near_far_planes=tuple(sensor_cfg.get('near_far_planes', [0.1, 200])),
+                    field_of_view_y=sensor_cfg.get('field_of_view_y', 18),
+                    range_min=sensor_cfg.get('range_min', 0.5),
+                    range_max=sensor_cfg.get('range_max', 150.0),
+                    vel_min=sensor_cfg.get('vel_min', -40),
+                    vel_max=sensor_cfg.get('vel_max', 40),
+                    range_bins=sensor_cfg.get('range_bins', 128),
+                    azimuth_bins=sensor_cfg.get('azimuth_bins', 64),
+                    vel_bins=sensor_cfg.get('vel_bins', 32),
+                    half_angle_deg=sensor_cfg.get('half_angle_deg', 9),
+                )
+                radars[sensor_key] = radar
+                print(f"{sensor_key.replace('_', ' ').title()} initialized")
+            except Exception as e:
+                print(f"{sensor_key} initialization error: {e}")
+                radars[sensor_key] = None
 
-    return beamng, scenario, vehicle, camera, lidar, radar
+    # Initialize GPS sensors - support multiple GPS (gps_front, gps_rear, etc.)
+    for sensor_key, sensor_cfg in sensors.items():
+        if sensor_key.startswith('gps_') and sensor_cfg.get('enabled', False):
+            try:
+                print(f"Attempting {sensor_key} initialization...")
+                gps = GPS(
+                    sensor_cfg['name'],
+                    beamng,
+                    vehicle,
+                    gfx_update_time=sensor_cfg.get('gfx_update_time', 0.0),
+                    physics_update_time=sensor_cfg.get('physics_update_time', 0.05),
+                    pos=tuple(sensor_cfg['pos']),
+                    ref_lon=sensor_cfg.get('ref_lon', 13.1856),
+                    ref_lat=sensor_cfg.get('ref_lat', 51.5074),
+                    is_send_immediately=sensor_cfg.get('is_send_immediately', False),
+                    is_visualised=sensor_cfg.get('is_visualised', False),
+                    is_snapping_desired=sensor_cfg.get('is_snapping_desired', False),
+                    is_force_inside_triangle=sensor_cfg.get('is_force_inside_triangle', False),
+                    is_dir_world_space=sensor_cfg.get('is_dir_world_space', False),
+                )
+                gps_sensors[sensor_key] = gps
+                print(f"{sensor_key.replace('_', ' ').title()} initialized")
+            except Exception as e:
+                print(f"{sensor_key} initialization error: {e}")
+                gps_sensors[sensor_key] = None
+
+    # Initialize IMU sensors - support multiple IMUs (imu_1, imu_2, etc.)
+    for sensor_key, sensor_cfg in sensors.items():
+        if sensor_key.startswith('imu_') and sensor_cfg.get('enabled', False):
+            try:
+                print(f"Attempting {sensor_key} initialization...")
+                imu = AdvancedIMU(
+                    sensor_cfg['name'],
+                    beamng,
+                    vehicle,
+                    gfx_update_time=sensor_cfg.get('gfx_update_time', 0.0),
+                    physics_update_time=sensor_cfg.get('physics_update_time', 0.01),
+                    pos=tuple(sensor_cfg['pos']),
+                    dir=tuple(sensor_cfg.get('dir', [0, -1, 0])),
+                    up=tuple(sensor_cfg.get('up', [0, 0, 1])),
+                    smoother_strength=sensor_cfg.get('smoother_strength', 1.0),
+                    is_send_immediately=sensor_cfg.get('is_send_immediately', False),
+                    is_using_gravity=sensor_cfg.get('is_using_gravity', False),
+                    is_allow_wheel_nodes=sensor_cfg.get('is_allow_wheel_nodes', False),
+                    is_visualised=sensor_cfg.get('is_visualised', False),
+                    is_snapping_desired=sensor_cfg.get('is_snapping_desired', False),
+                    is_force_inside_triangle=sensor_cfg.get('is_force_inside_triangle', False),
+                    is_dir_world_space=sensor_cfg.get('is_dir_world_space', False),
+                )
+                imus[sensor_key] = imu
+                print(f"{sensor_key.replace('_', ' ').title()} initialized")
+            except Exception as e:
+                print(f"{sensor_key} initialization error: {e}")
+                imus[sensor_key] = None
+
+    # Return primary camera (camera_front) and primary GPS for backwards compatibility
+    primary_camera = cameras.get('camera_front', next(iter(cameras.values())) if cameras else None)
+    primary_gps = gps_sensors.get('gps_front', next(iter(gps_sensors.values())) if gps_sensors else None)
+    primary_imu = imus.get('imu_1', next(iter(imus.values())) if imus else None)
+
+    return beamng, scenario, vehicle, primary_camera, lidar, radars, primary_gps, primary_imu, vehicle_model
 
 def get_vehicle_speed(vehicle):
     """
@@ -284,7 +361,7 @@ def get_vehicle_speed(vehicle):
     return speed_mps, speed_kph, position, direction
 
 
-def lane_detection_fused(img, speed_kph, previous_steering, step_i):
+def lane_detection_fused(img, speed_kph, previous_steering, step_i, vehicle_model='q8_andronisk'):
 
     # Use static variables to store last SCNN result/metrics/confidence
     if not hasattr(lane_detection_fused, "scnn_cache"):
@@ -298,7 +375,7 @@ def lane_detection_fused(img, speed_kph, previous_steering, step_i):
     cv_result, cv_metrics, cv_conf = lane_detection_cv_process_frame(
         img, speed=speed_kph, previous_steering=previous_steering, 
         debug_display=False, perspective_debug_display=False,
-        calibration_data=CAMERA_CALIBRATION
+        calibration_data=None, vehicle_model=vehicle_model
     )
 
     # Run SCNN every 5 frames (same as UNet was doing)
@@ -307,7 +384,7 @@ def lane_detection_fused(img, speed_kph, previous_steering, step_i):
             img, model=MODELS['lane_scnn'], device=MODELS['scnn_device'], 
             speed=speed_kph, previous_steering=previous_steering, 
             debug_display=False,
-            calibration_data=CAMERA_CALIBRATION
+            calibration_data=None, vehicle_model=vehicle_model
         )
         lane_detection_fused.scnn_cache = {
             'result': scnn_result,
@@ -326,8 +403,11 @@ def lane_detection_fused(img, speed_kph, previous_steering, step_i):
 
     cv_result_rgb = cv2.cvtColor(cv_result, cv2.COLOR_BGR2RGB)
     scnn_result_rgb = cv2.cvtColor(scnn_result, cv2.COLOR_BGR2RGB)
-    cv2.imshow('Lane Detection CV', cv_result_rgb)
-    cv2.imshow('Lane Detection SCNN', scnn_result_rgb)
+    display_scale = 0.5
+    cv_small = cv2.resize(cv_result_rgb, (0, 0), fx=display_scale, fy=display_scale)
+    scnn_small = cv2.resize(scnn_result_rgb, (0, 0), fx=display_scale, fy=display_scale)
+    cv2.imshow('Lane Detection CV', cv_small)
+    cv2.imshow('Lane Detection SCNN', scnn_small)
 
     result = cv_result if cv_conf > scnn_conf else scnn_result
 
@@ -396,7 +476,9 @@ def main():
         control_config = yaml.safe_load(f)
 
     # Change scenario name between 'highway' and 'city' here
-    beamng, scenario, vehicle, camera, lidar, radar = sim_setup(scenario_name='highway')
+    # You can also specify a vehicle: 'etk800_highway', 'q8_default_highway', 'etk800_city', 'q8_default_city'
+    # If vehicle_name is None, it will use the default vehicle from the scenario config
+    beamng, scenario, vehicle, camera, lidar, radars, gps, imu, vehicle_model = sim_setup(scenario_name='highway', vehicle_name='q8_default_highway')
     print("Simulation setup complete")
 
     print("Wait for sensors to initialize")
@@ -416,12 +498,36 @@ def main():
     except Exception as e:
         print(f"LiDAR error: {e}")
 
+    # Test all enabled radars
+    for radar_name, radar in radars.items():
+        if radar is not None:
+            try:
+                print(f"Testing {radar_name}...")
+                radar_test = radar.poll()
+                print(f"{radar_name.replace('_', ' ').title()} working: {type(radar_test)}")
+            except Exception as e:
+                print(f"{radar_name} error: {e}")
+
     try:
-        print("Testing radar...")
-        radar_test = radar.poll()
-        print(f"Radar working: {type(radar_test)}")
+        print("Testing GPS...")
+        gps_test = gps.poll()
+        print(f"GPS working: {type(gps_test)}")
     except Exception as e:
-        print(f"Radar error: {e}")
+        print(f"GPS error: {e}")
+
+    try:
+        print("Testing IMU...")
+        imu_test = imu.poll()
+        print(f"IMU working: {type(imu_test)}")
+    except Exception as e:
+        print(f"IMU error: {e}")
+
+    print("Setting up traffic")
+    try:
+        beamng.traffic.spawn(max_amount=3, police_ratio=0.0, extra_amount=0, parked_amount=0)
+        print("Traffic spawned: 3 vehicles")
+    except Exception as e:
+        print(f"Traffic setup error: {e}")
 
     # Load control parameters from config
     control_cfg = control_config['control']
@@ -438,18 +544,6 @@ def main():
     )
 
     frame_count = 0
-
-    log_dir = "./beamng_sim/drive_log"
-    os.makedirs(log_dir, exist_ok=True)
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_filename = f"drive_log_{timestamp}.csv"
-    log_path = os.path.join(log_dir, log_filename)
-    log_fields = ["frame", "deviation_m", "lane_center", "vehicle_center", "steering", "throttle", "speed_kph",
-                  "vehicle_pos_x", "vehicle_pos_y", "vehicle_pos_z", "vehicle_yaw_rad", "vehicle_dir_x", "vehicle_dir_y", "vehicle_dir_z",
-                  "lidar_pos_x", "lidar_pos_y", "lidar_pos_z", "lidar_yaw_rad"]
-    log_file = open(log_path, mode="w", newline="")
-    log_writer = csv.DictWriter(log_file, fieldnames=log_fields)
-    log_writer.writeheader()
 
     last_time = time.time()
     try:
@@ -486,7 +580,7 @@ def main():
             # Lane Detection
             try:
                 result, fused_metrics = lane_detection_fused(
-                    img, speed_kph, previous_steering, step_i=step_i
+                    img, speed_kph, previous_steering, step_i=step_i, vehicle_model=vehicle_model
                 )
             except Exception as lane_e:
                 print(f"Lane detection error: {lane_e}")
@@ -508,7 +602,6 @@ def main():
             throttle = throttle * (1.0 - 0.3 * abs(steering))
             throttle = np.clip(throttle, 0.05, 0.3)
 
-            # Log to CSV
             fused_confidence = fused_metrics.get('confidence', 0.0)
             
             # Calculate vehicle yaw from direction
@@ -520,27 +613,6 @@ def main():
             rotation = R.from_quat([car_quat[0], car_quat[1], car_quat[2], car_quat[3]])
             lidar_pos_in_map = rotation.apply(lidar_offset) + car_pos
             lidar_yaw = car_yaw  # LiDAR has same yaw as vehicle
-            
-            log_writer.writerow({
-                "frame": step_i,
-                "deviation_m": round(deviation, 3) if deviation is not None else 0.0,
-                "lane_center": round(lane_center, 3) if lane_center is not None else 0.0,
-                "vehicle_center": round(vehicle_center, 3) if vehicle_center is not None else 0.0,
-                "steering": round(steering, 3),
-                "throttle": round(throttle, 3),
-                "speed_kph": round(speed_kph, 3),
-                "vehicle_pos_x": round(car_pos[0], 3),
-                "vehicle_pos_y": round(car_pos[1], 3),
-                "vehicle_pos_z": round(car_pos[2], 3),
-                "vehicle_yaw_rad": round(car_yaw, 4),
-                "vehicle_dir_x": round(direction[0], 4),
-                "vehicle_dir_y": round(direction[1], 4),
-                "vehicle_dir_z": round(direction[2], 4),
-                "lidar_pos_x": round(lidar_pos_in_map[0], 3),
-                "lidar_pos_y": round(lidar_pos_in_map[1], 3),
-                "lidar_pos_z": round(lidar_pos_in_map[2], 3),
-                "lidar_yaw_rad": round(lidar_yaw, 4),
-            })
 
 
             if step_i % 80 == 0: # Lower later
@@ -560,7 +632,11 @@ def main():
                     print(f"Vehicle detection error: {vehicle_e}")
                     vehicle_detections = []
 
-            # radar_detections = radar_process_frame(radar_sensor=radar, camera_detections=vehicle_detections, speed=speed_kph)
+            # radar_detections, radar_fig = radar_process_frame(
+            #     radar_sensor=radar, 
+            #     speed=speed_kph,
+            #     debug_window=True  # Enable PPI visualization
+            # )
 
             # Lidar Road Boundaries
             try:
@@ -760,7 +836,6 @@ def main():
     except Exception as e:
         print(f"Error: {e}")
     finally:
-        log_file.close()
         cv2.destroyAllWindows()
         beamng.close()
 

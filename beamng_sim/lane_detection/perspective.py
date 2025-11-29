@@ -2,108 +2,236 @@ import numpy as np
 import cv2
 import pickle
 import os
+from pathlib import Path
 
+
+INTRINSIC_MATRIX = np.array([
+    [771.21, 0.0, 960.0],
+    [0.0, 771.21, 540.0],
+    [0.0, 0.0, 1.0]
+])
+
+DISTORTION_COEFFS = np.array([0.0, 0.0, 0.0, 0.0, 0.0])  # Assuming negligible distortion in virtual camera
+
+CAMERA_CONFIGS = {
+    'q8_andronisk': {
+        'height': 1.466,      # meters - from sensors.yaml pos[2]
+        'pitch': 0,          # degrees - approximate pitch angle
+        'resolution': (1920, 1080),
+        'mtx': INTRINSIC_MATRIX,
+        'dist': DISTORTION_COEFFS
+    },
+    'etk800': {
+        'height': 1.36,       # meters - from sensors.yaml pos[2]
+        'pitch': 0,          # degrees - approximate pitch angle
+        'resolution': (1920, 1080),
+        'mtx': INTRINSIC_MATRIX,
+        'dist': DISTORTION_COEFFS
+    }
+}
 
 def undistort_image(img, calibration_data):
     """
-    Undistort an image using camera calibration parameters.
+    Undistort an image using calibration parameters.
     
     Args:
-        img (numpy array): Distorted image
-        calibration_data (dict): Calibration data containing 'mtx' and 'dist'
+        img: Input image
+        calibration_data: Dictionary containing 'mtx' and 'dist' keys
     
     Returns:
-        numpy array: Undistorted image, or original image if calibration_data is None
+        Undistorted image
     """
     if calibration_data is None:
         return img
     
-    mtx = calibration_data['mtx']
-    dist = calibration_data['dist']
-    return cv2.undistort(img, mtx, dist, None, mtx)
+    mtx = calibration_data.get('mtx')
+    dist = calibration_data.get('dist')
+    
+    if mtx is None or dist is None:
+        return img
+    
+    return cv2.undistort(img, mtx, dist)
 
 
-def load_calibration(calibration_file):
+def get_camera_extrinsics(cam_height, cam_pitch_deg):
     """
-    Load camera calibration parameters from file.
-    
-    Args:
-        calibration_file (str): Path to pickled calibration file
-    
-    Returns:
-        dict: Calibration data containing mtx, dist, rvecs, tvecs, img_shape, rms_error
+    Creates the Rotation and Translation matrices for the camera.
+    Assumes camera is at (0,0,0) and road is at y = cam_height.
     """
-    if not os.path.exists(calibration_file):
-        raise FileNotFoundError(f"Calibration file not found: {calibration_file}")
+    pitch_rad = np.deg2rad(cam_pitch_deg)
     
-    with open(calibration_file, 'rb') as f:
-        calibration_data = pickle.load(f)
-    
-    print(f"Loaded calibration from: {calibration_file}")
-    print(f"RMS error: {calibration_data['rms_error']:.4f}")
-    
-    return calibration_data
-
-def get_src_points(image_shape, speed=0, previous_steering=0):
-    """
-    Generate source points for perspective transform based on the passed image shape, speed of the vehicle, and steering angle
-
-    Args:
-        image_shape (tuple): Shape of the input image (height, width, channels)
-        speed (float): Speed of the vehicle in km/h
-        previous_steering (float): Previous steering angle in degrees
-    
-    Returns:
-        Numpy Array: Array of source points for perspective transform left_bottom, right_bottom, top_right, top_left
-
-    """
-    h, w = image_shape[:2]
-
-    left_bottom  = [6, 300]
-    right_bottom = [634, 300]
-    top_right    = [385, 201]
-    top_left     = [255, 201]
-
-    speed_norm = min(speed / 120.0, 1.0)
-    top_shift = -30 * speed_norm
-    side_shift = 50 * speed_norm
-
-    src = np.float32([
-        [left_bottom[0] + side_shift, left_bottom[1]],           # Bottom-left
-        [right_bottom[0] - side_shift, right_bottom[1]],         # Bottom-right
-        [top_right[0] - side_shift, top_right[1] + top_shift],   # Top-right
-        [top_left[0] + side_shift, top_left[1] + top_shift]      # Top-left
+    R_x = np.array([
+        [1, 0, 0],
+        [0, np.cos(pitch_rad), -np.sin(pitch_rad)],
+        [0, np.sin(pitch_rad), np.cos(pitch_rad)]
     ])
+
+    return R_x
+
+def project_world_to_image(world_points, mtx, R, cam_height):
+    """
+    Projects 3D world coordinates (meters) to 2D image coordinates (pixels).
+    """
+    image_points = []
+    
+    for pt in world_points:
+
+        X_w, Z_w = pt # We only pass X and Z, Y is fixed
+        
+        # Original vector: [X, cam_height, Z]
+        vec_world = np.array([X_w, cam_height, Z_w])
+        
+        # Apply Rotation
+        vec_cam = R @ vec_world
+        
+        # Extract intrinsic parameters
+        f_x, f_y = mtx[0, 0], mtx[1, 1]
+        c_x, c_y = mtx[0, 2], mtx[1, 2]
+        
+        # Prevent division by zero if point is behind camera
+        if vec_cam[2] <= 0.1: 
+            continue
+            
+        u = (f_x * vec_cam[0] / vec_cam[2]) + c_x
+        v = (f_y * vec_cam[1] / vec_cam[2]) + c_y
+        
+        image_points.append([u, v])
+        
+    return np.float32(image_points)
+
+def get_dynamic_src_points(calibration_data, speed=0, cam_config=None):
+    """
+    Generates SRC points based on PHYSICAL parameters, not hardcoded pixels.
+    """
+    if cam_config is None:
+        # Default fallback (e.g. for base car)
+        cam_config = {'height': 1.4, 'pitch': 10} # meters, degrees
+        
+    mtx = calibration_data['mtx']
+    
+    speed_norm = min(speed / 120.0, 1.0)
+    look_ahead_start = 3.0 + (5.0 * speed_norm)   # Start 3m - 8m ahead
+    look_ahead_end   = 15.0 + (20.0 * speed_norm) # End 15m - 35m ahead
+    lane_width_roi   = 3.5  # Width of road area to capture (meters)
+    
+    # World Points (X, Z) -> (Lateral, Longitudinal)
+    # Order: Bottom-Left, Bottom-Right, Top-Right, Top-Left
+    world_roi = [
+        [-lane_width_roi, look_ahead_start], # BL
+        [ lane_width_roi, look_ahead_start], # BR
+        [ lane_width_roi, look_ahead_end],   # TR
+        [-lane_width_roi, look_ahead_end]    # TL
+    ]
+    
+    # 2. Get Rotation Matrix
+    R = get_camera_extrinsics(cam_config['height'], cam_config['pitch'])
+    
+    # 3. Project to Pixels
+    src_pixels = project_world_to_image(world_roi, mtx, R, cam_config['height'])
+    
+    return src_pixels
+
+
+def get_src_points(img_shape, speed=0, previous_steering=0, vehicle_model='q8_andronisk', calibration_data=None):
+    """
+    Backward-compatible wrapper to get source points for perspective transform.
+    
+    This function supports the old API while using the new physical-based approach.
+    
+    Args:
+        img_shape: Image shape (height, width, channels)
+        speed: Vehicle speed for dynamic adjustment
+        previous_steering: Previous steering angle (for future enhancements)
+        vehicle_model: Vehicle model ('q8_andronisk' or 'etk800')
+        calibration_data: Calibration data dictionary with 'mtx' key (optional; uses vehicle config by default)
+    
+    Returns:
+        Source points for perspective transform (4 points)
+    """
+    if vehicle_model not in CAMERA_CONFIGS:
+        print(f"Warning: Unknown vehicle model '{vehicle_model}', using default")
+        vehicle_model = 'q8_andronisk'
+    
+    cam_config = CAMERA_CONFIGS[vehicle_model]
+    
+    if calibration_data is None:
+        calibration_data = {'mtx': cam_config['mtx'], 'dist': cam_config['dist']}
+    
+    if 'mtx' in calibration_data:
+        try:
+            src_points = get_dynamic_src_points(calibration_data, speed=speed, cam_config=cam_config)
+            return src_points
+        except Exception as e:
+            print(f"Warning: Physical projection failed ({e}), falling back to hardcoded points")
+    
+    h, w = img_shape[0], img_shape[1]
+    
+    if vehicle_model == 'etk800':
+        # ETK800 specific points
+        src = np.float32([
+            [w * 0.15, h],      # Bottom-left
+            [w * 0.85, h],      # Bottom-right
+            [w * 0.95, h * 0.6],  # Top-right
+            [w * 0.05, h * 0.6]   # Top-left
+        ])
+    else:  # q8_andronisk (default)
+        # Q8 specific points
+        src = np.float32([
+            [w * 0.15, h],      # Bottom-left
+            [w * 0.85, h],      # Bottom-right
+            [w * 0.95, h * 0.6],  # Top-right
+            [w * 0.05, h * 0.6]   # Top-left
+        ])
     
     return src
 
-def perspective_warp(img, speed=0, debug_display=False, calibration_data=None):
+def perspective_warp(img, speed=0, calibration_data=None, vehicle_model='q8_andronisk', cam_height=None, cam_pitch=None):
     """
-    Applies perspective transform to the passed image using the source points generated.
-    Optionally applies camera undistortion first if calibration data is provided.
-
+    Apply perspective transform to get bird's-eye view.
+    
     Args:
-        img (numpy array): Input image to be warped
-        speed (float): Speed of the vehicle in km/h
-        calibration_data (dict): Optional camera calibration data for undistortion
+        img: Input image
+        speed: Vehicle speed for dynamic adjustment
+        calibration_data: Calibration data dictionary
+        vehicle_model: Vehicle model ('q8_andronisk' or 'etk800')
+        cam_height: Optional camera height override (if not using vehicle_model config)
+        cam_pitch: Optional camera pitch override (if not using vehicle_model config)
+    
     Returns:
-        tuple: (warped image, inverse perspective transform matrix)
+        binary_warped: Warped image in bird's-eye view
+        Minv: Inverse perspective transform matrix
     """
     
-    # Apply camera undistortion if calibration data is available
+    # 1. Undistort
     if calibration_data is not None:
         img = undistort_image(img, calibration_data)
-        
+        mtx = calibration_data.get('mtx')
+    else:
+        mtx = None
+
     img_size = (img.shape[1], img.shape[0])
     w, h = img_size
+    
+    # 2. Get camera configuration
+    if vehicle_model in CAMERA_CONFIGS:
+        cam_config = CAMERA_CONFIGS[vehicle_model]
+    else:
+        # Use provided heights/pitch or defaults
+        if cam_height is None:
+            cam_height = 1.4
+        if cam_pitch is None:
+            cam_pitch = 10
+        cam_config = {'height': cam_height, 'pitch': cam_pitch}
+    
+    src = get_src_points(img.shape, speed=speed, vehicle_model=vehicle_model, calibration_data=calibration_data)
 
-    src = get_src_points(img.shape, speed)
-
+    scale = 20 # pixels per meter
+    
     dst = np.float32([
-        [w*0.2, h],        # Bottom-left in warped space
-        [w*0.8, h],        # Bottom-right in warped space
-        [w*0.8, 0],        # Top-right in warped space
-        [w*0.2, 0]         # Top-left in warped space
+        [w*0.2, h],       # BL
+        [w*0.8, h],       # BR
+        [w*0.8, 0],       # TR
+        [w*0.2, 0]        # TL
     ])
 
     M = cv2.getPerspectiveTransform(src, dst)
@@ -114,13 +242,13 @@ def perspective_warp(img, speed=0, debug_display=False, calibration_data=None):
     return binary_warped, Minv
 
 
-def debug_perspective_live(img, speed_kph, previous_steering=0):
+def debug_perspective_live(img, speed_kph, previous_steering=0, vehicle_model='q8_andronisk', calibration_data=None):
     """
     Visualize the perspective transform source points on the original image for debugging.
     """
     debug_img = img.copy()
     
-    src_points = get_src_points(img.shape, speed_kph, previous_steering)
+    src_points = get_src_points(img.shape, speed_kph, previous_steering, vehicle_model=vehicle_model, calibration_data=calibration_data)
     
     src_int = src_points.astype(np.int32)
     
@@ -138,9 +266,11 @@ def debug_perspective_live(img, speed_kph, previous_steering=0):
                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
     cv2.putText(debug_img, f"Steering: {previous_steering:.1f} deg", (10, 55), 
                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-    cv2.putText(debug_img, "Perspective Transform Region", (10, 80), 
+    cv2.putText(debug_img, f"Vehicle: {vehicle_model}", (10, 80), 
                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
-    cv2.putText(debug_img, "Green: Transform Area", (10, 100), 
+    cv2.putText(debug_img, "Perspective Transform Region", (10, 105), 
+               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+    cv2.putText(debug_img, "Green: Transform Area", (10, 125), 
                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
     
     cv2.imshow('Perspective Transform Debug', debug_img)
