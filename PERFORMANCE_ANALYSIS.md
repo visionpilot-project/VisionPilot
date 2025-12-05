@@ -1042,28 +1042,6 @@ def load_models():
 
 ### Issues
 
-#### 11.1 Hardcoded Parameters Throughout Code
-**Examples:**
-```python
-# beamng.py:468
-if step_i % 80 == 0:  # Magic number
-
-# lane_finder.py:43
-nwindows = 9  # Hardcoded
-
-# thresholding.py:70
-if avg_brightness < 80:  # Magic number
-    x_low = 30  # Magic number
-```
-
-**Problem:**
-- Hard to tune and experiment
-- No single source of truth
-- Can't easily compare different configurations
-
-**Solution:**
-Create comprehensive config file:
-
 ```yaml
 # beamng_sim/config/perception.yaml
 lane_detection:
@@ -1102,64 +1080,6 @@ vehicle_detection:
   detection_interval: 80
 ```
 
----
-
-## Performance Optimization Roadmap
-
-### Phase 1: Quick Wins (1-2 days)
-**Target:** 30-40% performance improvement
-
-1. **Remove redundant color conversions** (lane detection)
-   - Impact: 4ms per frame
-   - Complexity: Low
-   - Files: `thresholding.py`
-
-2. **Optimize sliding window search**
-   - Remove unnecessary debug image creation
-   - Impact: 2ms per frame
-   - Files: `lane_finder.py`
-
-3. **Fix print statement spam**
-   - Add verbosity control
-   - Impact: 2-5ms per frame
-   - Files: All files
-
-4. **Buffer CSV writes**
-   - Impact: 1ms per frame
-   - Files: `beamng.py`
-
-**Total Phase 1 Savings:** 9-12ms per frame
-
----
-
-### Phase 2: Architectural Improvements (3-5 days)
-**Target:** Additional 20-30% improvement
-
-1. **Adaptive SCNN scheduling**
-   - Run SCNN only when needed
-   - Impact: 5-10ms average
-   - Files: `beamng.py`, `fusion.py`
-
-2. **Implement model batching**
-   - Batch sign classification
-   - Impact: 2-3x faster sign processing
-   - Files: `sign/detect_classify.py`
-
-3. **Fix control loop timing**
-   - Consistent dt for PID controllers
-   - Impact: Better driving, easier tuning
-   - Files: `beamng.py`, `pid_controller.py`
-
-4. **Optimize memory usage**
-   - Reduce image copies
-   - Buffer reuse
-   - Impact: 1-2ms, reduced GC pauses
-   - Files: Multiple
-
-**Total Phase 2 Savings:** Additional 8-15ms per frame
-
----
-
 ### Phase 3: Major Refactoring (1-2 weeks)
 **Target:** Clean architecture + additional improvements
 
@@ -1185,112 +1105,6 @@ vehicle_detection:
 
 **Total Phase 3 Savings:** Additional 5-10ms + better maintainability
 
----
-
-## Expected Performance Results
-
-### Current Performance (Estimated)
-- **Main loop:** ~50-80ms per frame
-- **Framerate:** 12-20 FPS
-- **Breakdown:**
-  - Lane detection: 25-30ms (CV: 15ms, SCNN: 15-20ms every 5 frames)
-  - Sign detection: 10-15ms (every 80 frames)
-  - Vehicle detection: 5-10ms (every 80 frames)
-  - LiDAR: 2-3ms (mostly wasted)
-  - Radar: 1ms (unused)
-  - Control: 2-3ms
-  - Logging/Foxglove: 5-10ms
-
-### After Phase 1 Optimizations
-- **Main loop:** ~35-60ms per frame
-- **Framerate:** 16-28 FPS
-- **Improvement:** 30-40%
-
-### After Phase 2 Optimizations
-- **Main loop:** ~25-45ms per frame
-- **Framerate:** 22-40 FPS
-- **Improvement:** 50-60% from baseline
-
-### After Phase 3 Optimizations
-- **Main loop:** ~20-35ms per frame
-- **Framerate:** 28-50 FPS
-- **Improvement:** 60-75% from baseline
-- **Bonus:** Much cleaner, more maintainable code
-
----
-
-## Critical Issues Summary
-
-### Must Fix (Before Production)
-1. ✅ **LiDAR processing is disabled** - Either implement or remove
-2. ✅ **Radar data is unused** - Either implement ACC or remove
-3. ✅ **Excessive print statements** - Add verbosity control
-4. ✅ **Inconsistent control loop timing** - Fix dt calculation
-
-### Should Fix (For Performance)
-1. ✅ **Redundant color conversions** - 4ms savings
-2. ✅ **Inefficient sliding window** - 2ms savings
-3. ✅ **Non-adaptive SCNN scheduling** - 5-10ms savings
-4. ✅ **Memory inefficiencies** - Reduce allocations
-
-### Nice to Have (For Maintainability)
-1. ✅ **Centralized configuration** - All params in YAML
-2. ✅ **Better error handling** - Don't silently catch exceptions
-3. ✅ **State management** - Add reset functions
-4. ✅ **Parallel model loading** - Faster startup
-
----
-
-## Testing Recommendations
-
-After implementing optimizations:
-
-1. **Benchmark each change separately**
-   ```python
-   import time
-   
-   start = time.perf_counter()
-   result = lane_detection_cv_process_frame(...)
-   duration = time.perf_counter() - start
-   print(f"Lane detection: {duration*1000:.2f}ms")
-   ```
-
-2. **Profile the main loop**
-   ```python
-   import cProfile
-   import pstats
-   
-   profiler = cProfile.Profile()
-   profiler.enable()
-   
-   # Run simulation for 100 frames
-   for i in range(100):
-       # main loop
-       pass
-   
-   profiler.disable()
-   stats = pstats.Stats(profiler)
-   stats.sort_stats('cumulative')
-   stats.print_stats(20)
-   ```
-
-3. **Monitor memory usage**
-   ```python
-   import tracemalloc
-   
-   tracemalloc.start()
-   # Run simulation
-   current, peak = tracemalloc.get_traced_memory()
-   print(f"Current: {current / 10**6:.1f}MB, Peak: {peak / 10**6:.1f}MB")
-   tracemalloc.stop()
-   ```
-
-4. **Compare driving performance**
-   - Record deviation metrics before and after
-   - Ensure smoother control, not just faster processing
-   - Check that accuracy hasn't degraded
-
----
 
 ## Conclusion
 

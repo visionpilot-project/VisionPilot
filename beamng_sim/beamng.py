@@ -10,12 +10,12 @@ from beamngpy import BeamNGpy, Scenario, Vehicle
 from beamngpy.sensors import Camera, Lidar, Radar, GPS, AdvancedIMU
 from foxglove.schemas import Color
 
-from beamng_sim.sign.detect_classify import random_brightness
-
 from config.config import SIGN_DETECTION_MODEL, SIGN_CLASSIFICATION_MODEL, VEHICLE_PEDESTRIAN_MODEL, SCNN_LANE_DETECTION_MODEL, LIGHT_DETECTION_CLASSIFICATION_MODEL
 
 from ultralytics import YOLO
 import tensorflow as tf
+from tensorflow.keras.models import load_model
+
 import torch
 import numpy as np
 import time
@@ -83,9 +83,8 @@ def load_models():
     print("Sign detection model loaded")
 
     # Sign classification model with custom objects used during training
-    MODELS['sign_classify'] = tf.keras.models.load_model(
+    MODELS['sign_classify'] = load_model(
         str(SIGN_CLASSIFICATION_MODEL), 
-        custom_objects={"random_brightness": random_brightness}
     )
     print("Sign classification model loaded")
     
@@ -124,8 +123,10 @@ def load_config():
         scenarios_config = yaml.safe_load(f)
     with open(os.path.join(config_path, 'sensors.yaml'), 'r') as f:
         sensors_config = yaml.safe_load(f)
-        
-    return beamng_config, scenarios_config, sensors_config
+    with open(os.path.join(config_path, 'control.yaml'), 'r') as f:
+        control = yaml.safe_load(f)
+
+    return beamng_config, scenarios_config, sensors_config, control
 
 
 def sim_setup(map_name='west_coast_usa', scenario_type='highway', vehicle_name='q8_andronisk'):
@@ -136,7 +137,7 @@ def sim_setup(map_name='west_coast_usa', scenario_type='highway', vehicle_name='
         scenario_type (str): Scenario type ('highway' or 'city')
         vehicle_name (str): Name of the vehicle to use ('etk800' or 'q8_andronisk')
     """
-    beamng_config, scenarios_config, sensors_config = load_config()
+    beamng_config, scenarios_config, sensors_config, control = load_config()
     
     if map_name not in scenarios_config['maps']:
         raise ValueError(f"Map '{map_name}' not found in config. Available maps: {list(scenarios_config['maps'].keys())}")
@@ -562,7 +563,8 @@ def main():
         print(f"Traffic setup error: {e}")
 
     # Load control parameters from config
-    control_cfg = control_config['control']
+    _, _, _, control = load_config()
+    control_cfg = control['control']
     steering_pid = PIDController(**control_cfg['steering_pid'])
     max_steering_change = control_cfg['max_steering_change']
     previous_steering = 0.0
@@ -672,7 +674,7 @@ def main():
                 # Combine and display all detections
                 try:
                     combined_img = draw_combined_detections(img, sign_detections, vehicle_detections, traffic_light_detections)
-                    cv2.imshow('All Detections', combined_img)
+                    #cv2.imshow('All Detections', combined_img)
                 except Exception as draw_e:
                     print(f"Error drawing detections: {draw_e}")
 

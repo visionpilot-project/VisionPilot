@@ -1,8 +1,5 @@
 import cv2 as cv
 import numpy as np
-import os
-import pandas as pd
-import uuid
 from ultralytics import YOLO
 import tensorflow as tf
 import sys
@@ -10,11 +7,58 @@ from PIL import Image
 from beamng_sim.vehicle_obstacle.vehicle_obstacle_detection import detect_vehicles_pedestrians
 from config.config import SIGN_DETECTION_MODEL, SIGN_CLASSIFICATION_MODEL
 
-from tensorflow.keras.saving import register_keras_serializable
+from tensorflow.keras.models import load_model
 
 IMG_SIZE = (48, 48)
 SIGN_MODEL_PATH = str(SIGN_DETECTION_MODEL)
 SIGN_CLASSIFY_MODEL_PATH = str(SIGN_CLASSIFICATION_MODEL)
+
+# GTSRB class names (hardcoded)
+SIGN_CLASSES = { 
+    0:'Speed limit (20km/h)',
+    1:'Speed limit (30km/h)', 
+    2:'Speed limit (50km/h)', 
+    3:'Speed limit (60km/h)', 
+    4:'Speed limit (70km/h)', 
+    5:'Speed limit (80km/h)', 
+    6:'End of speed limit (80km/h)', 
+    7:'Speed limit (100km/h)', 
+    8:'Speed limit (120km/h)', 
+    9:'No passing', 
+    10:'No passing veh over 3.5 tons', 
+    11:'Right-of-way at intersection', 
+    12:'Priority road', 
+    13:'Yield', 
+    14:'Stop', 
+    15:'No vehicles', 
+    16:'Veh > 3.5 tons prohibited', 
+    17:'No entry', 
+    18:'General caution', 
+    19:'Dangerous curve left', 
+    20:'Dangerous curve right', 
+    21:'Double curve', 
+    22:'Bumpy road', 
+    23:'Slippery road', 
+    24:'Road narrows on the right', 
+    25:'Road work', 
+    26:'Traffic signals', 
+    27:'Pedestrians', 
+    28:'Children crossing', 
+    29:'Bicycles crossing', 
+    30:'Beware of ice/snow',
+    31:'Wild animals crossing', 
+    32:'End speed + passing limits', 
+    33:'Turn right ahead', 
+    34:'Turn left ahead', 
+    35:'Ahead only', 
+    36:'Go straight or right', 
+    37:'Go straight or left', 
+    38:'Keep right', 
+    39:'Keep left', 
+    40:'Roundabout mandatory', 
+    41:'End of no passing', 
+    42:'End no passing veh > 3.5 tons' 
+}
 
 def get_models_dict():
     try:
@@ -24,10 +68,6 @@ def get_models_dict():
         return None
     except:
         return None
-
-@register_keras_serializable()
-def random_brightness(x):
-    return tf.image.random_brightness(x, max_delta=0.2)
 
 def preprocess_img(img):
     """
@@ -52,36 +92,10 @@ def preprocess_img(img):
     img = img.astype(np.float32) / 255.0
     return img
 
-def load_class_names(csv_path):
-    try:
-        df = pd.read_csv(csv_path)
-        print(f"Loading class names from {csv_path}")
-        print("CSV columns found:", df.columns.tolist())
-        
-        class_names = {}
-        id_column = 'id'
-        desc_column = 'description'
-        
-        for _, row in df.iterrows():
-            class_id = row[id_column]
-            name = row[desc_column]
-            class_names[str(class_id)] = name
-            
-        print(f"Loaded {len(class_names)} sign classes")
-        return class_names
-        
-    except Exception as e:
-        print(f"Error processing CSV: {e}")
-        return {}
-
-sign_dic_path = os.path.join(os.path.dirname(__file__), "sign_dic.csv")
-class_names_dict = load_class_names(sign_dic_path)
-
-num_classes = max(map(int, class_names_dict.keys())) + 1
-class_descriptions = ["Unknown Class"] * num_classes
-for class_id, description in class_names_dict.items():
-    class_id = int(class_id)
-    if 0 <= class_id < num_classes:
+# Build class descriptions from hardcoded SIGN_CLASSES
+class_descriptions = ["Unknown Class"] * 43
+for class_id, description in SIGN_CLASSES.items():
+    if 0 <= class_id < 43:
         class_descriptions[class_id] = description
 
 def classify_sign_crop(sign_crop):
@@ -94,7 +108,7 @@ def classify_sign_crop(sign_crop):
         if models_dict is not None and 'sign_classify' in models_dict:
             classification_model = models_dict['sign_classify']
         else:
-            classification_model = tf.keras.models.load_model(SIGN_CLASSIFY_MODEL_PATH, custom_objects={"random_brightness": random_brightness})
+            classification_model = load_model(SIGN_CLASSIFY_MODEL_PATH)
 
         pred = classification_model.predict(img, verbose=0)
         class_idx = np.argmax(pred[0])
@@ -140,7 +154,7 @@ def detect_classify_sign(frame):
     if models_dict is not None and 'sign_classify' in models_dict:
         classification_model = models_dict['sign_classify']
     else:
-        classification_model = tf.keras.models.load_model(SIGN_CLASSIFY_MODEL_PATH, custom_objects={"random_brightness": random_brightness})
+        classification_model = tf.keras.models.load_model(SIGN_CLASSIFY_MODEL_PATH)
         print(f"Warning: Loading sign classification model from scratch - slower!")
 
     results = detection_model(frame, conf=0.2)

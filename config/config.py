@@ -9,7 +9,7 @@ VIDEOS_DIR = BASE_DIR / "videos"
 
 VEHICLE_PEDESTRIAN_MODEL = MODELS_DIR / "object" / "vehicle_pedestrian_detection.pt"
 SIGN_DETECTION_MODEL = MODELS_DIR / "traffic_sign" / "ts_det.pt"
-SIGN_CLASSIFICATION_MODEL = MODELS_DIR / "traffic_sign" / "ts_class.pt"
+SIGN_CLASSIFICATION_MODEL = MODELS_DIR / "traffic_sign" / "ts_class.h5"
 LIGHT_DETECTION_CLASSIFICATION_MODEL = MODELS_DIR / "traffic_light" / "traffic_lights_yolov8x.pt"
 SCNN_LANE_DETECTION_MODEL = MODELS_DIR / "scnn_lanedet" / "scnn.pth"
 

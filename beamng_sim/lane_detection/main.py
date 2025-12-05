@@ -54,7 +54,7 @@ def process_frame_cv(img, speed=0, previous_steering=0, debug_display=False, per
             cv2.imshow('Warped Binary CV', warped_display)
         
         histogram = get_histogram(binary_warped)
-        ploty, left_fit, right_fit, left_fitx, right_fitx = sliding_window_search(binary_warped, histogram)
+        ploty, left_fit, right_fit, left_fitx, right_fitx = sliding_window_search(binary_warped, histogram, debug_display=debug_display)
 
         current_fit = (left_fit, right_fit)
         
@@ -167,7 +167,7 @@ def process_frame_scnn(img, model, device='cpu', speed=0, previous_steering=0, d
         
         # Find lane lines using sliding window search
         histogram = get_histogram(binary_warped)
-        ploty, left_fit, right_fit, left_fitx, right_fitx = sliding_window_search(binary_warped, histogram)
+        ploty, left_fit, right_fit, left_fitx, right_fitx = sliding_window_search(binary_warped, histogram, debug_display=debug_display)
         
         current_fit = (left_fit, right_fit)
         
