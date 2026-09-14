@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="media/bannernobg.png" alt="VisionPilot Banner" height="200" />
+  <img src="media/readme/bannernobg.png" alt="VisionPilot Banner" height="200" />
 </p>
 
 # VisionPilot: Autonomous Driving Simulation, Computer Vision & Real-Time Perception (BeamNG.tech)
@@ -154,12 +154,15 @@ Watch the Emergency Braking System (AEB) in action with real-time radar filterin
 
 **Extended Demo:** [Watch the full video here](https://www.youtube.com/watch?v=Z8Y2-MpmrRg)
 
+<!--
 ---
 
 ### Blind Spot Detection (BSD)
 See the Blind Spot Detection (BSD) system in action using radar data to identify vehicles in the blind spot:
 <img src="media/demo_gifs/bsd_demo.gif" alt="Blind Spot Detection Demo" width="600" height="337" />
 **Extended Demo:** [Watch the full video here](https://www.youtube.com/watch?v=Z8Y2-MpmrRg)
+
+-->
 
 ---
 
@@ -251,13 +254,15 @@ The vehicle is equipped with a comprehensive multi-sensor suite for autonomous p
 
 <table>
   <tr>
-    <td align="center"><img src="media/beamng_images/sensors.png" alt="Sensor Array 1" width="280"/></td>
-    <td align="center"><img src="media/beamng_images/radar_front.png" alt="Sensor Array 2" width="280"/></td>
-    <td align="center"><img src="media/beamng_images/lidar.png" alt="Sensor Array 3" width="280"/></td>
+    <td align="center"><img src="media/readme/sensors.png" alt="Sensor Array 1" width="280"/></td>
+    <td align="center"><img src="media/readme/radar_front.png" alt="Radar Front" width="280"/></td>
+    <td align="center"><img src="media/readme/radar_rear.png" alt="Radar Rear" width="280"/></td>
+    <td align="center"><img src="media/readme/lidar.png" alt="Lidar Visualization" width="280"/></td>
   </tr>
   <tr>
     <td align="center"><em>Sensor Array</em></td>
     <td align="center"><em>Front Radar</em></td>
+    <td align="center"><em>Rear Radars</em></td>
     <td align="center"><em>Lidar Visualization</em></td>
   </tr>
 </table>
