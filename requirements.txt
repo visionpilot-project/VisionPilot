@@ -12,7 +12,6 @@ beamngpy==1.35.1
 flask==3.0.0
 requests==2.31.0
 flask-cors
-foxglove
 foxglove-sdk
 addict
 open3d
