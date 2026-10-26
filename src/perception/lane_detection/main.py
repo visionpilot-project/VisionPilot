@@ -4,7 +4,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from src.perception.lane_detection.cv.thresholding import apply_thresholds_with_voting
 from src.perception.lane_detection.cv.perspective import debug_perspective_live, get_src_points, perspective_warp
 from src.perception.lane_detection.cv.lane_finder import get_histogram, detect_lane_type, fill_dashed_lane_gaps
-from src.perception.lane_detection.metrics import calculate_curvature_and_deviation, process_deviation
+from src.perception.lane_detection.metrics import calculate_curvature_and_deviation
 from src.perception.lane_detection.visualization import draw_multiple_lanes_overlay, add_text_overlay
 
 from src.perception.lane_detection.cv.multi_lane.multi_lane_finder import detect_multiple_lanes
@@ -37,22 +37,23 @@ def _get_ufld_model():
     return _ufld_model if _ufld_model is not False else None
 
 
-def process_frame_cv(img, speed=0, previous_steering=0, debug_display=False, perspective_debug_display=False, calibration_data=None, vehicle_model='q8_andronisk', num_lanes=3):
-        
-    previous_fit = None
-    confidence = 0.0
+def process_frame_ufld(img):
+    """Run UFLD once and return its lane mask for later CV processing."""
+    ufld_model = _get_ufld_model()
+    if ufld_model is None:
+        return None
+    try:
+        return ufld_model.infer(img)
+    except Exception as e:
+        print(f"[MAIN] UFLDv2 inference failed: {e}")
+        return None
+
+
+def process_frame_cv(img, speed=0, previous_steering=0, debug_display=False, perspective_debug_display=False, calibration_data=None, vehicle_model='q8_andronisk', num_lanes=3, lookahead_m=None, ufld_mask=None):
+
     try:
 
         src_points = get_src_points(img.shape, speed, previous_steering, vehicle_model=vehicle_model, calibration_data=calibration_data)
-
-        ufld_model = _get_ufld_model()
-        ufld_mask = None
-        if ufld_model is not None:
-            try:
-                ufld_mask = ufld_model.infer(img)
-            except Exception as e:
-                print(f"[MAIN] UFLDv2 inference failed: {e}")
-                ufld_mask = None
 
         # Apply thresholding to full image with UFLD as voting feature
         binary_image, avg_brightness = apply_thresholds_with_voting(
@@ -93,7 +94,8 @@ def process_frame_cv(img, speed=0, previous_steering=0, debug_display=False, per
         for attempt_lanes in [num_lanes, num_lanes-1, 2, 1]:
             if attempt_lanes < 1:
                 break
-            lanes = detect_multiple_lanes(binary_warped, num_lanes=attempt_lanes, debug=debug_display)
+            # SET TO FALSE TEMPORARILY
+            lanes = detect_multiple_lanes(binary_warped, num_lanes=attempt_lanes, debug=False)
             if lanes is not None:
                 detected_num_lanes = attempt_lanes
                 print(f"[MULTI_LANE] Successfully detected {detected_num_lanes} lanes")
@@ -106,12 +108,12 @@ def process_frame_cv(img, speed=0, previous_steering=0, debug_display=False, per
             print("[Multi-Lane] detection failed")
             result = img.copy()
             metrics = {
+                'valid': False,
                 'current_lane': None,
                 'all_lanes': None,
-                'confidence': 0.0,
                 'error': 'Multi-lane detection failed'
             }
-            return result, metrics, 0.0
+            return result, metrics
         
         # show lanes in warped space
         if debug_display:
@@ -143,7 +145,9 @@ def process_frame_cv(img, speed=0, previous_steering=0, debug_display=False, per
         
         # classify lanes and get current lane
         warped_width = binary_warped.shape[1]
-        lane_info = get_current_lane(lanes, vehicle_center=None, image_width=img.shape[1], warped_width=warped_width, debug=debug_display)
+
+        # SET TO FALSE TEMPORARILY
+        lane_info = get_current_lane(lanes, vehicle_center=None, image_width=img.shape[1], warped_width=warped_width, debug=False)
         current_lane_data = lane_info['current_lane']
         all_lanes = lane_info['all_lanes']
 
@@ -162,12 +166,12 @@ def process_frame_cv(img, speed=0, previous_steering=0, debug_display=False, per
                 print("[MAIN] No lane data available")
                 result = img.copy()
                 metrics = {
+                    'valid': False,
                     'current_lane': None,
                     'all_lanes': None,
-                    'confidence': 0.0,
                     'error': 'No lane data'
                 }
-                return result, metrics, 0.0
+                return result, metrics
         
         # extract data
         ploty = lane_data['ploty']
@@ -222,60 +226,51 @@ def process_frame_cv(img, speed=0, previous_steering=0, debug_display=False, per
             cv2.imshow('Warped Lanes Detected', warped_lanes_display_resized)
         
         # Calculate metrics
-        current_fit = (left_fit, right_fit)
-        metrics_result = calculate_curvature_and_deviation(ploty, left_fitx, right_fitx, binary_warped, original_image_width=img.shape[1])
+        lane_metrics = calculate_curvature_and_deviation(left_fit, right_fit, left_fitx, right_fitx, ploty, binary_warped.shape, speed=speed, lookahead_m=lookahead_m)
 
-        previous_fit = current_fit
-
-        if metrics_result is None or (isinstance(metrics_result, tuple) and all(x is None for x in metrics_result)):
-            left_curverad, right_curverad, deviation, lane_center, vehicle_center, lane_width = None, None, None, None, None, None
+        if lane_metrics is None:
             print("[METRICS] Lane detection metrics calculation returned None values")
-        else:
-            if len(metrics_result) == 6:
-                left_curverad, right_curverad, deviation, lane_center, vehicle_center, lane_width = metrics_result
-            elif len(metrics_result) == 5:
-                left_curverad, right_curverad, deviation, lane_center, vehicle_center = metrics_result
-                lane_width = None
-            else:
-                left_curverad, right_curverad, deviation, lane_center, vehicle_center, lane_width = None, None, None, None, None, None
+            lane_metrics = {
+                'deviation': None,
+                'deviation_ahead': None,
+                'lookahead_m': None,
+                'curvature_radius': None,
+                'lane_center': None,
+                'vehicle_center': None,
+                'lane_width': None,
+            }
+        valid = lane_metrics['deviation_ahead'] is not None
+        deviation = lane_metrics['deviation']
+        deviation_ahead = lane_metrics['deviation_ahead']
+        curvature_radius = lane_metrics['curvature_radius']
 
-        smoothed_deviation, effective_deviation = process_deviation(deviation if deviation is not None else 0.0)
-        
-        if debug_display:
-            print(f"[METRICS] raw_dev={deviation:.4f}m, smoothed_dev={smoothed_deviation:.4f}m, effective_dev={effective_deviation:.4f}m")
-            print(f"[METRICS] lane_center={lane_center:.1f}px, vehicle_center={vehicle_center:.1f}px, lane_width={lane_width:.1f}px")
-            if left_curverad and right_curverad:
-                print(f"[METRICS] curvature: left={left_curverad:.1f}m, right={right_curverad:.1f}m")
-        
-        result = add_text_overlay(result, left_curverad, right_curverad, deviation, avg_brightness, speed, confidence=confidence)
-        
+        if debug_display and valid:
+            print(f"[METRICS] dev={deviation:.4f}m, dev_ahead={deviation_ahead:.4f}m @ {lane_metrics['lookahead_m']:.1f}m")
+            print(f"[METRICS] lane_center={lane_metrics['lane_center']:.1f}px, vehicle_center={lane_metrics['vehicle_center']:.1f}px, lane_width={lane_metrics['lane_width']:.1f}px")
+            print(f"[METRICS] curvature radius={curvature_radius:.1f}m")
+
+        result = add_text_overlay(result, curvature_radius, deviation, deviation_ahead, avg_brightness, speed)
+
         if debug_display:
             debug_y = 150
-            cv2.putText(result, f"Raw Dev: {deviation:.3f}m", (10, debug_y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
-            cv2.putText(result, f"Smoothed: {smoothed_deviation:.3f}m", (10, debug_y + 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-            cv2.putText(result, f"Effective: {effective_deviation:.3f}m", (10, debug_y + 50), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            if valid:
+                cv2.putText(result, f"Dev: {deviation:.3f}m", (10, debug_y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+                cv2.putText(result, f"Dev ahead ({lane_metrics['lookahead_m']:.1f}m): {deviation_ahead:.3f}m", (10, debug_y + 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
             if current_lane_data:
                 cv2.putText(result, f"Lane: {current_lane_data['lane_class']} (ID:{current_lane_data['lane_id']}) pos={current_lane_data['position_in_lane']:.2f}", 
-                           (10, debug_y + 75), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-            cv2.putText(result, f"Curv L:{left_curverad:.0f}m R:{right_curverad:.0f}m" if left_curverad else "Curv: N/A", 
-                       (10, debug_y + 100), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
+                           (10, debug_y + 50), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            cv2.putText(result, f"Curv R:{curvature_radius:.0f}m" if valid else "Curv: N/A", 
+                       (10, debug_y + 75), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
         
         metrics = {
-            'left_curverad': left_curverad,
-            'right_curverad': right_curverad,
-            'deviation': deviation,  # raw deviation
-            'smoothed_deviation': smoothed_deviation,
-            'effective_deviation': effective_deviation,
-            'lane_center': lane_center,
-            'vehicle_center': vehicle_center,
-            'lane_width': lane_width,
-            'confidence': confidence,
+            'valid': valid,
+            **lane_metrics,
             'current_lane': current_lane_data,
             'all_lanes': all_lanes,
             'detected_num_lanes': detected_num_lanes
         }
         
-        return result, metrics, confidence
+        return result, metrics
         
     except Exception as e:
         print(f"Lane detection error CV: {e}")
@@ -283,15 +278,9 @@ def process_frame_cv(img, speed=0, previous_steering=0, debug_display=False, per
         traceback.print_exc()
         result = img.copy()
         metrics = {
-            'left_curverad': 0,
-            'right_curverad': 0,
-            'deviation': 0,
-            'lane_center': 0,
-            'vehicle_center': 0,
-            'lane_width': 0,
-            'confidence': 0,
+            'valid': False,
             'current_lane': None,
             'all_lanes': None,
             'error': str(e)
         }
-        return result, metrics, 0.0
+        return result, metrics

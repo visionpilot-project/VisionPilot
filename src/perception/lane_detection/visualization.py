@@ -99,31 +99,26 @@ def draw_multiple_lanes_overlay(original_image, warped_image, Minv, lanes, all_l
         return original_image
 
 
-def add_text_overlay(image, left_curverad, right_curverad, deviation, avg_brightness, speed, confidence):
+def add_text_overlay(image, curvature_radius, deviation, deviation_ahead, avg_brightness, speed):
     """
-    Add text overlay with lane curvature, deviation, average brightness, and speed.
+    Add text overlay with lane deviation, curvature radius and average brightness.
     Args:
         image: Image to add text overlay on
-        left_curverad: Left lane line curvature in meters
-        right_curverad: Right lane line curvature in meters
+        curvature_radius: Lane curvature radius at the lookahead distance in meters
         deviation: Vehicle deviation from lane center in meters
+        deviation_ahead: Vehicle deviation from lane center at the lookahead distance in meters
         avg_brightness: Average brightness of the image
         speed: Vehicle speed in km/h
-        confidence: Confidence score of lane detection (0.0 to 1.0)
     Returns:
         Image with text overlay
     """
 
     fontType = cv2.FONT_HERSHEY_SIMPLEX
     
-    if deviation is None:
+    if deviation is None or deviation_ahead is None:
         deviation_text = "Deviation: N/A"
     else:
-        try:
-            direction = '+' if deviation > 0 else '-'
-            deviation_text = f"Deviation: {direction}{abs(float(deviation)):.2f}m"
-        except (TypeError, ValueError):
-            deviation_text = "Deviation: ERROR"
+        deviation_text = f"Deviation: {float(deviation):+.2f}m  ahead: {float(deviation_ahead):+.2f}m"
     
     cv2.putText(image, deviation_text, (30, 50), fontType, 0.4, (0, 0, 0), 1)
 
@@ -135,13 +130,13 @@ def add_text_overlay(image, left_curverad, right_curverad, deviation, avg_bright
     else:
         cv2.putText(image, "Avg Brightness: N/A", (30, 80), fontType, 0.4, (0, 0, 0), 1)
 
-    if confidence is not None:
-        try:
-            cv2.putText(image, f"Confidence: {float(confidence):.2f}", (30, 110), fontType, 0.4, (0, 0, 0), 1)
-        except (TypeError, ValueError):
-            cv2.putText(image, "Confidence: ERROR", (30, 110), fontType, 0.4, (0, 0, 0), 1)
+    if curvature_radius is None:
+        curvature_text = "Curvature: N/A"
+    elif curvature_radius > 2000:
+        curvature_text = "Curvature: straight"
     else:
-        cv2.putText(image, "Confidence: N/A", (30, 110), fontType, 0.4, (0, 0, 0), 1)
+        curvature_text = f"Curvature: R {float(curvature_radius):.0f}m"
+    cv2.putText(image, curvature_text, (30, 110), fontType, 0.4, (0, 0, 0), 1)
 
     return image
 

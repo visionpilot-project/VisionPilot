@@ -227,16 +227,6 @@ See real-time LiDAR point cloud streaming and autonomous vehicle telemetry in Fo
 
 ---
 
-### Multi Camera Scene Segmentation
-
-See real-time image segmentation using front and rear cameras:
-
-<img src="media/demo_gifs/segmentation.gif" alt="Segmentation Demo" width="600" height="337" />
-
-**Extended Demo:** [Watch the full video here](https://youtu.be/4PAqcUKqn6c?si=UHw-mw7iLZKGXvav)
-
----
-
 > More demo videos and visualizations will be added as features are completed.
 
 ## Sensor Suite
@@ -285,7 +275,6 @@ VisionPilot is designed to use a **containerized microservices architecture** wh
 | **Traffic Light Detection** | 6777 | Traffic light detection & state classification | YOLOv11 |
 | **Sign Detection** | 7777 | Traffic sign detection | YOLOv11 |
 | **Sign Classification** | 8777 | Traffic sign type classification | CNN |
-| **YOLOP** | 9777 | Unified: lanes + drivable area + objects | YOLOPX |
 
 ### Data Flow
 
@@ -299,7 +288,6 @@ Aggregator (concurrent orchestration)
     ├─→ Traffic Light (6777)
     ├─→ Sign Detection (7777)
     ├─→ Sign Classification (8777)
-    └─→ YOLOP (9777)
     ↓
 Merge all responses
     ↓
@@ -370,8 +358,8 @@ Extract individual results + visualize
     - [x] Cruise Control (CC)
   - [x] Automatic Emergency Braking (AEB)
   - [x] 🔥 Blind Spot Monitoring (BSD)
-  - [ ] Dynamic Target Speed
-  - [ ] Curve Speed Optimization
+  - [x] Dynamic Target Speed
+  - [x] Curve Speed Optimization
   
 - [ ] Tactical & Behavior Planning
   - [ ] Behavior Tree Architecture (Stop, Yield, Lane Change, Overtake)

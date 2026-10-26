@@ -5,7 +5,7 @@ import logging
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from utils.pid_controller import PIDController
+from utils.pid_controller import PIDController, LaneKeepingController
 
 from beamngpy import BeamNGpy, Scenario, Vehicle
 from beamngpy.sensors import Camera, Lidar, Radar, GPS, AdvancedIMU
@@ -38,8 +38,9 @@ sys.modules['__main__'].MODELS = local_models
 from src.perception.object_detection.main import process_frame as object_process
 from src.perception.traffic_light_detection.main import process_frame as tl_process
 from src.perception.sign_detection.main import process_frame as sign_process
-from src.perception.lane_detection.main import process_frame_cv as cv_lane_process
+from src.perception.lane_detection.main import process_frame_cv as cv_lane_process, process_frame_ufld
 from src.perception.lane_detection.cv.perspective import perspective_warp, get_src_points
+from src.control_planning.longitudinal_control.speed_limiter import curve_speed_limit
 
 from src.sensor_fusion.lidar.main import process_frame as lidar_process_frame
 from src.sensor_fusion.radar.main import process_frame as radar_process_frame
@@ -145,9 +146,11 @@ def sim_setup(map_name='west_coast_usa', scenario_type='highway', vehicle_name='
     scenario.add_vehicle(vehicle, pos=tuple(scenario_cfg['spawn_pos']), rot_quat=rot)
 
     scenario.make(beamng)
-    beamng.settings.set_deterministic(60)
+    beamng.settings.set_deterministic(sim_cfg['deterministic_fps'])
     beamng.scenario.load(scenario)
     beamng.scenario.start()
+    # step() only advances a paused simulation, otherwise it keeps running while we process a frame
+    beamng.control.pause()
 
     # Setup sensors - select config based on vehicle model
     vehicle_model = vehicle_cfg['model']
@@ -318,7 +321,7 @@ def get_vehicle_speed(vehicle):
 
     vehicle.poll_sensors()
     if 'vel' in vehicle.state:
-        speed_mps = vehicle.state['vel'][0]
+        speed_mps = float(np.linalg.norm(vehicle.state['vel']))
         speed_kph = speed_mps * 3.6
     else:
         speed_mps = 0.0
@@ -401,7 +404,6 @@ def cruise_control(target_speed_kph, current_speed_kph, speed_pid, SIM_DT):
     """
     speed_error = target_speed_kph - current_speed_kph
     throttle = speed_pid.update(speed_error, SIM_DT)
-    throttle = np.clip(throttle, 0.0, 1.0)
     return throttle
 
 def main():
@@ -419,7 +421,6 @@ def main():
     #         'traffic_light_detection': 6777,
     #         'sign_detection': 7777,
     #         'sign_classification': 8777,
-    #         'yolop': 9777
     #     },
     #     timeout=2.0,
     #     auto_health_check=True
@@ -496,24 +497,22 @@ def main():
     enable_obj_det = perception_flags.get('enable_object_detection', True)
     enable_tl_det = perception_flags.get('enable_traffic_light_detection', True)
     enable_sign_det = perception_flags.get('enable_sign_detection', True)
+    enable_ufld = perception_flags.get('enable_ufld', True)
+    enable_lidar_processing = perception_flags.get('enable_lidar_processing', False)
     debug_cv_lane = perception_flags.get('debug_cv_lane_detection', False)
     debug_perspective = perception_flags.get('debug_perspective', False)
     print(f"[Main] perception flags - lane:{enable_cv_lane} obj:{enable_obj_det} tl:{enable_tl_det} sign:{enable_sign_det} debug:{debug_cv_lane}")
 
     # Enable debug for steering PID to see terms
-    steering_pid_config = control_cfg['steering_pid'].copy()
-    steering_pid_config['debug'] = True
-    steering_pid = PIDController(**steering_pid_config)
-    max_steering_change = control_cfg['max_steering_change']
+    lane_keeper = LaneKeepingController(control_cfg['lane_keeping'], debug=False)
     previous_steering = 0.0
 
+    curve_speed_cfg = control_cfg['curve_speed']
+
     min_gap = control_cfg['min_gap']
-    target_speed_kph = control_cfg['target_speed_kph']
-    speed_pid = PIDController(
-        Kp=control_cfg['speed_pid']['Kp'],
-        Ki=control_cfg['speed_pid']['Ki'],
-        Kd=control_cfg['speed_pid']['Kd']
-    )
+    set_speed_kph = control_cfg['target_speed_kph']
+    target_speed_kph = set_speed_kph
+    speed_pid = PIDController(**control_cfg['speed_pid'], out_min=0.0, out_max=1.0)
 
     # Speed control mode: 'cruise' (normal), 'adaptive' (ACC), or 'none' (manual)
     speed_control_mode = control_cfg['speed_control_mode']
@@ -521,20 +520,40 @@ def main():
 
     frame_count = 0
 
+    # Cache last valid lane detection for frame skipping
+    last_deviation = 0.0
+    last_deviation_ahead = 0.0
+    last_curvature_radius = float('inf')
+    last_ufld_mask = None
+    object_frame_skip = perception_flags.get('object_detection_frame_skip', 6)
+    traffic_light_frame_skip = perception_flags.get('traffic_light_detection_frame_skip', 6)
+    sign_frame_skip = perception_flags.get('sign_detection_frame_skip', 10)
+    cv_lane_frame_skip = perception_flags.get('cv_lane_detection_frame_skip', 2)
+    ufld_frame_skip = perception_flags.get('ufld_frame_skip', 1)
+
+    object_detections = []
+    traffic_light_detections = []
+    sign_detections = []
+
     last_time = time.time()
-    # Simulation runs at 60Hz deterministic, beamng.control.step(10) advances 10 physics steps
-    # Each physics step = 1/60s, so 10 steps = 10/60 = 0.1667s simulation time
-    SIM_DT = 10.0 / 60.0  # 0.1667s per loop iteration
+    # Simulation runs deterministic at deterministic_fps, beamng.control.step(10) advances 10 physics steps
+    # At 60 fps 10 steps = 10/60 = 0.1667s simulation time
+    SIM_DT = 10.0 / beamng_cfg['simulation']['deterministic_fps']
     try:
         step_i = 0
         while True:
+            loop_start = time.perf_counter()
 
             try:
+                step_start = time.perf_counter()
                 beamng.control.step(10)
+                print(f"[TIMING] sim step: {(time.perf_counter()-step_start)*1000:.1f}ms")
             except Exception as e:
                 print(f"[Main] Simulation step error: {e}")
 
+            poll_start = time.perf_counter()
             images = camera.poll()
+            print(f"[TIMING] camera poll: {(time.perf_counter()-poll_start)*1000:.1f}ms")
             if images is None or 'colour' not in images:
                 print(f"[Camera] Invalid camera poll response")
                 continue
@@ -562,78 +581,91 @@ def main():
             try:
                 start_proc = time.time()
                 img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-                
+
                 # conditional execution based on perception flags
-                if enable_obj_det:
+                if enable_obj_det and frame_count % object_frame_skip == 0:
+                    obj_start = time.perf_counter()
                     object_detections, _ = object_process(img_bgr, confidence_threshold=0.4, draw_detections=False, model=local_models.get('vehicle'))
-                else:
+                    print(f"[TIMING] object detection: {(time.perf_counter()-obj_start)*1000:.1f}ms")
+                elif not enable_obj_det:
                     object_detections = []
-                    
-                if enable_tl_det:
+
+                if enable_tl_det and frame_count % traffic_light_frame_skip == 0:
+                    tl_start = time.perf_counter()
                     traffic_light_detections, _ = tl_process(img_bgr, confidence_threshold=0.2, draw_detections=False, model=local_models.get('traffic_light'))
-                else:
+                    print(f"[TIMING] traffic light detection: {(time.perf_counter()-tl_start)*1000:.1f}ms")
+                elif not enable_tl_det:
                     traffic_light_detections = []
-                    
-                if enable_sign_det:
+
+                if enable_sign_det and frame_count % sign_frame_skip == 0:
+                    sign_start = time.perf_counter()
                     sign_detections, _ = sign_process(img_bgr, confidence_threshold=0.45, draw_detections=False, detection_model=local_models.get('sign_detect'), classification_model=local_models.get('sign_classify'))
-                else:
+                    print(f"[TIMING] sign detection: {(time.perf_counter()-sign_start)*1000:.1f}ms")
+                elif not enable_sign_det:
                     sign_detections = []
 
-                if enable_cv_lane:
-                    cv_result_image, metrics, cv_confidence = cv_lane_process(
+                if enable_cv_lane and (frame_count % cv_lane_frame_skip == 0):
+                    lane_start = time.perf_counter()
+                    cv_result_image, metrics = cv_lane_process(
                         img,
                         speed=speed_kph,
                         previous_steering=previous_steering,
                         debug_display=debug_cv_lane,
                         perspective_debug_display=debug_perspective,
-                        vehicle_model='etk800',
-                        num_lanes=3
+                        vehicle_model=vehicle_model,
+                        num_lanes=3,
+                        lookahead_m=lane_keeper.lookahead_m(speed_kph),
+                        ufld_mask=last_ufld_mask
                     )
+                    print(f"[TIMING] lane detection: {(time.perf_counter()-lane_start)*1000:.1f}ms")
+
+                    # Update cache with new detection
+                    lane_metrics = metrics
+                    if lane_metrics.get('valid'):
+                        last_deviation = lane_metrics.get('deviation', last_deviation)
+                        last_deviation_ahead = lane_metrics.get('deviation_ahead', last_deviation_ahead)
+                        last_curvature_radius = lane_metrics.get('curvature_radius', last_curvature_radius)
                 else:
                     cv_result_image = None
-                    metrics = {'deviation': 0.0, 'lane_center': 0.0, 'vehicle_center': 0.0, 'confidence': 0.0}
-                    cv_confidence = 0.0
-                
+                    lane_metrics = {'valid': False}
+                    print(f"[TIMING] lane detection: SKIPPED (using cached)")
+
+                # Refresh UFLD after CV so the next CV pass uses the newest mask.
+                if enable_ufld and frame_count % ufld_frame_skip == 0:
+                    ufld_start = time.perf_counter()
+                    last_ufld_mask = process_frame_ufld(img)
+                    print(f"[TIMING] UFLD: {(time.perf_counter()-ufld_start)*1000:.1f}ms")
+
                 logger.info(f"Local processing latency: {(time.time()-start_proc)*1000:.1f}ms")
-                
-                # assign directly instead of extracting from aggregator result
-                lane_metrics = metrics
-                deviation = lane_metrics.get('deviation', 0.0)
-                # ensure deviation is not None
-                if deviation is None:
-                    deviation = 0.0
-                smoothed_deviation = lane_metrics.get('smoothed_deviation', deviation)
-                if smoothed_deviation is None:
-                    smoothed_deviation = deviation
-                effective_deviation = lane_metrics.get('effective_deviation', deviation)
-                if effective_deviation is None:
-                    effective_deviation = deviation
-                lane_center = lane_metrics.get('lane_center', 0.0)
-                if lane_center is None:
-                    lane_center = 0.0
-                vehicle_center = lane_metrics.get('vehicle_center', 0.0)
-                if vehicle_center is None:
-                    vehicle_center = 0.0
-                fused_confidence = lane_metrics.get('confidence', 0.0)
-                if fused_confidence is None:
-                    fused_confidence = 0.0
-                
-                # Log lane tracking info
-                current_lane = lane_metrics.get('current_lane')
-                if current_lane:
-                    print(f"[MAIN] Tracking: lane={current_lane.get('lane_class', '?')} (ID:{current_lane.get('lane_id', '?')}), pos_in_lane={current_lane.get('position_in_lane', 0):.2f}, deviation={deviation:.3f}m, eff_dev={effective_deviation:.3f}m")
+
+                # Use current detection if valid, else fall back to cached
+                if lane_metrics.get('valid'):
+                    deviation = lane_metrics.get('deviation')
+                    deviation_ahead = lane_metrics.get('deviation_ahead')
                 else:
-                    print(f"[MAIN] No lane tracked, deviation={deviation:.3f}m, eff_dev={effective_deviation:.3f}m")
+                    deviation = last_deviation
+                    deviation_ahead = last_deviation_ahead
+                curvature_radius = last_curvature_radius
+                
+                # Log lane tracking info (only on detection frames)
+                if frame_count % cv_lane_frame_skip == 0:
+                    current_lane = lane_metrics.get('current_lane')
+                    if deviation is None:
+                        print(f"[MAIN] Lane not valid: {lane_metrics.get('error', 'metrics rejected')}")
+                    elif current_lane:
+                        print(f"[MAIN] Tracking: lane={current_lane.get('lane_class', '?')} (ID:{current_lane.get('lane_id', '?')}), pos_in_lane={current_lane.get('position_in_lane', 0):.2f}, deviation={deviation:.3f}m, dev_ahead={deviation_ahead:.3f}m @ {lane_metrics['lookahead_m']:.1f}m, R={curvature_radius:.0f}m")
+                    else:
+                        print(f"[MAIN] No lane tracked, deviation={deviation:.3f}m, dev_ahead={deviation_ahead:.3f}m")
             
             except Exception as agg_e:
                 print(f"[Main] Local perception error: {agg_e}")
                 continue
 
-            steering = steering_pid.update(-effective_deviation, SIM_DT)
-            steering = np.clip(steering, -1.0, 1.0)
-            steering_change = steering - previous_steering
-            if abs(steering_change) > max_steering_change:
-                steering = previous_steering + np.sign(steering_change) * max_steering_change
+            steering = lane_keeper.update(deviation_ahead, speed_kph, SIM_DT)
+
+            # Slow down before curves
+            if curve_speed_cfg['enabled']:
+                target_speed_kph = curve_speed_limit(set_speed_kph, curvature_radius, curve_speed_cfg['lat_accel_max'], curve_speed_cfg['min_speed_kph'])
 
             throttle = 0.0
             brake = 0.0
@@ -692,10 +724,12 @@ def main():
             #Application of the vehicle controls to BeamNG
 
             try:
+                ctrl_start = time.perf_counter()
                 vehicle.control(throttle=float(throttle), brake=float(brake), steering=float(steering))
+                print(f"[TIMING] vehicle control: {(time.perf_counter()-ctrl_start)*1000:.1f}ms")
             except Exception as e:
                 print(f"[Main] Error sending control to vehicle: {e}")
-                
+
             previous_steering = steering
 
             # Display CV lane detection window
@@ -713,8 +747,6 @@ def main():
                 cv2.imshow('Object Detections', combined_disp)
             except Exception as draw_e:
                 print(f"[Object Detection] Error drawing detections: {draw_e}")
-                
-            fused_confidence = lane_metrics.get('confidence', 0.0)
             
             # Calculate vehicle yaw from direction
             car_yaw = np.arctan2(-direction[1], -direction[0])
@@ -724,13 +756,15 @@ def main():
             rotation = R.from_quat([car_quat[0], car_quat[1], car_quat[2], car_quat[3]])
             lidar_pos_in_map = rotation.apply(lidar_offset) + car_pos
             lidar_yaw = car_yaw  # LiDAR has same yaw as vehicle
+            filtered_points = None
 
-            try:
-                lidar_lane_boundaries, filtered_points = lidar_process_frame(lidar, beamng=beamng, speed=speed_kph, debug_window=None, vehicle=vehicle, car_position=car_pos, car_direction=direction)
-            except Exception as lidar_e:
-                print(f"[LiDAR] Lidar process error: {lidar_e}")
-                lidar_lane_boundaries = None
-                filtered_points = None
+            if enable_lidar_processing:
+                try:
+                    lidar_lane_boundaries, filtered_points = lidar_process_frame(lidar, beamng=beamng, speed=speed_kph, debug_window=None, vehicle=vehicle, car_position=car_pos, car_direction=direction)
+                except Exception as lidar_e:
+                    print(f"[LiDAR] Lidar process error: {lidar_e}")
+                    lidar_lane_boundaries = None
+                    filtered_points = None
 
 
             # Lidar Object Detection
@@ -755,6 +789,7 @@ def main():
             step_i += 1
 
             try:
+                fox_start = time.perf_counter()
                 # Send vehicle control state (steering, throttle, brake)
                 timestamp_ns = get_timestamp_ns()
                 bridge.send_vehicle_control(
@@ -764,6 +799,7 @@ def main():
                     throttle=throttle,
                     brake=brake
                 )
+                print(f"[TIMING] foxglove send_vehicle_control: {(time.perf_counter()-fox_start)*1000:.1f}ms")
             except Exception as control_send_e:
                 print(f"[Foxglove] Error sending vehicle control to Foxglove: {control_send_e}")
 

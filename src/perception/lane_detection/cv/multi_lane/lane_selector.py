@@ -59,8 +59,8 @@ def get_current_lane(lanes, vehicle_center=None, image_width=None, warped_width=
     closest_lane = None
     
     for lane in lanes:
-        left_boundary_x = lane['left_fitx'][-1]
-        right_boundary_x = lane['right_fitx'][-1]
+        left_boundary_x = lane['left_fitx'][0]  # bottom row, ploty is descending
+        right_boundary_x = lane['right_fitx'][0]
         lane_id = lane['lane_id']
         
         # Classify lane by position

@@ -7,10 +7,16 @@ simulation:
 perception:
   enable_cv_lane_detection: true
   debug_cv_lane_detection: true
-  enable_object_detection: true
-  enable_traffic_light_detection: true
-  enable_sign_detection: true
-  enable_yolop: true
+  enable_object_detection: false
+  enable_traffic_light_detection: false
+  enable_sign_detection: false
+  enable_ufld: true
+  object_detection_frame_skip: 6
+  traffic_light_detection_frame_skip: 6
+  sign_detection_frame_skip: 10
+  cv_lane_detection_frame_skip: 2
+  ufld_frame_skip: 1
+  enable_lidar_processing: false
   debug_perspective: true
 
 vehicles:

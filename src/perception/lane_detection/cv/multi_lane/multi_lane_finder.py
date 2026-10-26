@@ -169,15 +169,15 @@ def detect_multiple_lanes(binary_warped, num_lanes=3, debug=False):
     num_peaks = num_lanes + 1
     lane_boundaries = find_lane_boundaries(histogram, num_peaks=num_peaks, debug=debug)
     
-    if lane_boundaries is not None and len(lane_boundaries) >= num_peaks:
-        print(f"[MULTI_LANE] Detected {len(lane_boundaries)} boundaries at: {lane_boundaries}")
+    # if lane_boundaries is not None and len(lane_boundaries) >= num_peaks:
+    #     print(f"[MULTI_LANE] Detected {len(lane_boundaries)} boundaries at: {lane_boundaries}")
     
-    if lane_boundaries is None or len(lane_boundaries) < num_peaks:
-        print(f"[MULTI_LANE] First attempt found {len(lane_boundaries) if lane_boundaries is not None else 0} peaks, retrying with lower threshold...")
-        lane_boundaries = find_lane_boundaries(histogram, num_peaks=num_peaks, height_threshold=0.1 * np.max(histogram), debug=debug)
+    # if lane_boundaries is None or len(lane_boundaries) < num_peaks:
+    #     print(f"[MULTI_LANE] First attempt found {len(lane_boundaries) if lane_boundaries is not None else 0} peaks, retrying with lower threshold...")
+    #     lane_boundaries = find_lane_boundaries(histogram, num_peaks=num_peaks, height_threshold=0.1 * np.max(histogram), debug=debug)
     
-    if lane_boundaries is not None and len(lane_boundaries) >= num_peaks:
-        print(f"[MULTI_LANE] Detected {len(lane_boundaries)} boundaries at: {lane_boundaries} (with lower threshold)")
+    # if lane_boundaries is not None and len(lane_boundaries) >= num_peaks:
+    #     print(f"[MULTI_LANE] Detected {len(lane_boundaries)} boundaries at: {lane_boundaries} (with lower threshold)")
     
     if lane_boundaries is None or len(lane_boundaries) < num_peaks:
         return None

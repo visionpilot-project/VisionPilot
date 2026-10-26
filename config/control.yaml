@@ -1,18 +1,39 @@
 control:
 
-  steering_pid:
-    Kp: 0.020
-    Ki: 0.0
-    Kd: 0.03
-    Kf: 0.015
+  lane_keeping:
+    v_low_kph: 10
+    v_high_kph: 60
 
-  max_steering_change: 0.22
+    kp_low: 0.40
+    kp_high: 0.18
+    kd_low: 0.05
+    kd_high: 0.05
+    ki: 0.02
+    i_max: 0.2
+
+    deadzone_m: 0.02
+    lpf_tau_s: 0.25
+    slew_per_s_low: 1.5 # max steering change per second
+    slew_per_s_high: 0.6
+
+    inertia_ticks: 3 # ticks to hold the last error when the lane is lost (3 x 0.167s = 0.5s)
+    inertia_decay: 0.7 # then error *= decay every tick
+
+    # meters from the camera, clipped to the BEV region (3-15m at 0 kph, 5-23m at 50 kph)
+    lookahead_m_low: 5.0
+    lookahead_m_high: 9.0
+
+  curve_speed:
+    enabled: true
+    lat_accel_max: 3.0 # m/s^2
+    min_speed_kph: 15
+
   target_speed_kph: 50
   min_gap: 10.0
 
   speed_control_mode: cruise # options: 'manual', 'adaptive', 'cruise'
 
   speed_pid:
-    Kp: 0.02
-    Ki: 0.0
-    Kd: 0.01
+    kp: 0.02
+    ki: 0.0
+    kd: 0.01

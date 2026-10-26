@@ -13,6 +13,15 @@ INTRINSIC_MATRIX = np.array([
 
 DISTORTION_COEFFS = np.array([0.0, 0.0, 0.0, 0.0, 0.0])  # assuming negligible distortion for simplicity
 
+
+ROI_NEAR_M = 3.0
+ROI_NEAR_SPEED_M = 5.0
+ROI_FAR_M = 15.0
+ROI_FAR_SPEED_M = 20.0
+ROI_SPEED_NORM_KPH = 120.0
+ROI_HALF_WIDTH_M = 7.0
+BEV_DST_X_FRAC = (0.2, 0.8)
+
 CAMERA_CONFIGS = {
     'q8_andronisk': {
         'height': 1.466,
@@ -99,6 +108,40 @@ def project_world_to_image(world_points, mtx, R, cam_height):
         
     return np.float32(image_points)
 
+def get_roi_range(speed=0):
+    """
+    Near and far edge of the BEV region in metres from the camera for a given speed (kph).
+    """
+    speed_norm = min(speed / ROI_SPEED_NORM_KPH, 1.0)
+    look_ahead_start = ROI_NEAR_M + (ROI_NEAR_SPEED_M * speed_norm)
+    look_ahead_end = ROI_FAR_M + (ROI_FAR_SPEED_M * speed_norm)
+    return look_ahead_start, look_ahead_end
+
+
+def bev_m_per_px(bev_shape, speed=0):
+    """
+    Metres per BEV pixel from the warp geometry.
+
+    Returns:
+        tuple: (mx_per_px lateral, my_per_px longitudinal)
+    """
+    h, w = bev_shape[0], bev_shape[1]
+    near, far = get_roi_range(speed)
+    mx_per_px = (2 * ROI_HALF_WIDTH_M) / ((BEV_DST_X_FRAC[1] - BEV_DST_X_FRAC[0]) * w)
+    my_per_px = (far - near) / h
+    return mx_per_px, my_per_px
+
+
+def bev_row_for_distance(distance_m, bev_shape, speed=0):
+    """
+    BEV row (y px) that lies distance_m in front of the camera, clipped to the BEV.
+    """
+    h = bev_shape[0]
+    near, far = get_roi_range(speed)
+    y = h - (distance_m - near) / (far - near) * h
+    return float(np.clip(y, 0, h - 1))
+
+
 def get_dynamic_src_points(calibration_data, speed=0, cam_config=None):
     """
     Generates SRC points based on PHYSICAL parameters, not hardcoded pixels.
@@ -108,10 +151,8 @@ def get_dynamic_src_points(calibration_data, speed=0, cam_config=None):
         
     mtx = calibration_data['mtx']
     
-    speed_norm = min(speed / 120.0, 1.0)
-    look_ahead_start = 3.0 + (5.0 * speed_norm)
-    look_ahead_end   = 15.0 + (20.0 * speed_norm)
-    lane_width_roi   = 7.0
+    look_ahead_start, look_ahead_end = get_roi_range(speed)
+    lane_width_roi = ROI_HALF_WIDTH_M
 
     world_roi = [
         [-lane_width_roi, look_ahead_start], # BL
@@ -223,13 +264,12 @@ def perspective_warp(img, speed=0, calibration_data=None, vehicle_model='q8_andr
     
     src = get_src_points(img.shape, speed=speed, vehicle_model=vehicle_model, calibration_data=calibration_data)
 
-    scale = 20 # pixels per meter
-    
+    x_l, x_r = BEV_DST_X_FRAC
     dst = np.float32([
-        [w*0.2, h],       # BL
-        [w*0.8, h],       # BR
-        [w*0.8, 0],       # TR
-        [w*0.2, 0]        # TL
+        [w*x_l, h],       # BL
+        [w*x_r, h],       # BR
+        [w*x_r, 0],       # TR
+        [w*x_l, 0]        # TL
     ])
 
     M = cv2.getPerspectiveTransform(src, dst)

@@ -1,55 +1,10 @@
 import numpy as np
 
-
-def smooth_deviation(raw_deviation, alpha=0.65):
-    """
-    Apply exponential smoothing to deviation values to reduce noise.
-    
-    Args:
-        raw_deviation: Current frame's raw deviation value
-        alpha: Smoothing factor (0-1), higher values = less smoothing
-        
-    Returns:
-        smoothed_deviation: Filtered deviation value
-    """
-
-    if not hasattr(smooth_deviation, 'smoothed_deviation'):
-        smooth_deviation.smoothed_deviation = raw_deviation if raw_deviation is not None else 0.0
-    
-    if raw_deviation is not None:
-        smooth_deviation.smoothed_deviation = (
-            alpha * raw_deviation + (1 - alpha) * smooth_deviation.smoothed_deviation
-        )
-    
-    return smooth_deviation.smoothed_deviation
+from src.perception.lane_detection.cv.perspective import get_roi_range, bev_m_per_px, bev_row_for_distance
 
 
-def apply_deviation_deadzone_and_scaling(smoothed_deviation, dead_zone=0.1, max_dev=1.5):
-    """
-    Apply deadzone and scaling to smoothed deviation for control purposes.
-    
-    Args:
-        smoothed_deviation: Smoothed deviation value
-        dead_zone: Minimum deviation threshold below which output is zero
-        max_dev: Maximum deviation for scaling calculation
-        
-    Returns:
-        effective_deviation: Processed deviation ready for control input
-    """
-
-    if smoothed_deviation is None:
-        return 0.0
-    
-    if abs(smoothed_deviation) < dead_zone:
-        effective_deviation = 0.0
-    else:
-        ramp = (abs(smoothed_deviation) - dead_zone) / (max_dev - dead_zone)
-        ramp = np.clip(ramp, 0.0, 1.0)
-        effective_deviation = np.sign(smoothed_deviation) * ramp * min(abs(smoothed_deviation), max_dev)
-        if abs(smoothed_deviation) > max_dev:
-            print(f"Large deviation detected: {smoothed_deviation:.2f}m")
-    
-    return effective_deviation
+LANE_WIDTH_M = 3.55
+MAX_OFFSET_JUMP_M = 0.5  # max change of deviation between two frames before we stop trusting it
 
 
 def validate_lane_geometry(left_fitx, right_fitx, ploty):
@@ -132,111 +87,118 @@ def check_lane_width_outliers(lane_width_pix):
     return True
 
 
-def calculate_curvature_and_deviation(ploty, left_fitx, right_fitx, binary_warped, original_image_width=None):
+def check_offset_jump(deviation_m, max_jump=MAX_OFFSET_JUMP_M, max_rejects=3):
     """
-    Calculate lane curvature and vehicle deviation from lane center.
-    
-    Args:
-        ploty: Y coordinates for lane fitting
-        left_fitx: X coordinates for left lane line
-        right_fitx: X coordinates for right lane line
-        binary_warped: Warped binary image for reference
-        original_image_width: Width of original (unwarped) image. If None, uses binary_warped width.
+    Reject frames where the deviation jumps more than max_jump since the last accepted frame
+    (typically the detector switching to a neighbour lane for one frame).
+    After max_rejects rejections in a row the new value is accepted, so a real change is not ignored forever.
+
     Returns:
-        tuple: (left_curverad, right_curverad, deviation_m, lane_center, vehicle_center)
-               Returns (None, None, None, None, None) if validation fails
+        bool: True if deviation is acceptable, False if it's a jump
     """
-    ym_per_pix = 30/720  # meters per pixel in y dimension
+
+    if not hasattr(check_offset_jump, 'previous_deviation'):
+        check_offset_jump.previous_deviation = None
+        check_offset_jump.rejects = 0
+
+    previous = check_offset_jump.previous_deviation
+    if previous is not None and abs(deviation_m - previous) > max_jump and check_offset_jump.rejects < max_rejects:
+        check_offset_jump.rejects += 1
+        print(f"Deviation jump rejected: {previous:.2f}m -> {deviation_m:.2f}m ({check_offset_jump.rejects}/{max_rejects})")
+        return False
+
+    check_offset_jump.previous_deviation = deviation_m
+    check_offset_jump.rejects = 0
+    return True
+
+
+def curvature_radius(fit, y_eval, mx_per_px, my_per_px):
+    """
+    Radius of curvature in metres of x = a*y^2 + b*y + c (fit in BEV pixels) at row y_eval.
+    Returns 1e6 for a straight line.
+    """
+    a_px, b_px, _ = fit
+    a_m = mx_per_px / (my_per_px ** 2) * a_px
+    b_m = mx_per_px / my_per_px * b_px
+    y_m = y_eval * my_per_px
+    if abs(a_m) < 1e-7:
+        return 1e6
+    return (1 + (2 * a_m * y_m + b_m) ** 2) ** 1.5 / abs(2 * a_m)
+
+
+def calculate_curvature_and_deviation(left_fit, right_fit, left_fitx, right_fitx, ploty, bev_shape, speed=0, lookahead_m=None, lane_width_m=LANE_WIDTH_M):
+    """
+    Calculate lane curvature and vehicle deviation from lane center, at the bottom of the BEV and at a lookahead distance.
+
+    Sign: deviation > 0 means the vehicle is right of the lane center.
+
+    Args:
+        left_fit, right_fit: 2nd order polynomial fits x(y) of the lane lines in BEV pixels
+        left_fitx, right_fitx, ploty: Evaluated lane lines (ploty descending, index 0 = bottom row)
+        bev_shape: Shape of the warped image
+        speed: Vehicle speed in kph (the BEV region depends on it)
+        lookahead_m: Distance from the camera to measure deviation_ahead at, clipped to the BEV region.
+                     None means the bottom row.
+        lane_width_m: Real lane width used for the lateral scale
+    Returns:
+        dict with deviation, deviation_ahead, lookahead_m, curvature_radius, lane_center, vehicle_center, lane_width
+        or None if validation fails
+    """
+
+    if left_fit is None or right_fit is None:
+        return None
 
     # Validate lane geometry
     is_valid, lane_width_pix = validate_lane_geometry(left_fitx, right_fitx, ploty)
     if not is_valid:
-        return None, None, None, None, None
+        return None
 
     # Check for lane width outliers
     if not check_lane_width_outliers(lane_width_pix):
-        return None, None, None, None, None
+        return None
 
-    # Get geometry values
-    leftx = left_fitx[::-1]
-    rightx = right_fitx[::-1]
-    y_eval = np.max(ploty)
-    left_bottom = leftx[-1]
-    right_bottom = rightx[-1]
-
-    # Calculate scaling factor
-    xm_per_pix = 3.55 / lane_width_pix
+    # Lateral scale from the detected lane width, longitudinal scale from the warp geometry
+    xm_per_pix = lane_width_m / lane_width_pix
+    _, ym_per_pix = bev_m_per_px(bev_shape, speed)
 
     if xm_per_pix <= 0 or xm_per_pix > 0.1:
         print(f"Unreasonable xm_per_pix: {xm_per_pix:.4f}")
-        return None, None, None, None, None
+        return None
 
-    try:
-        # Calculate curvature in real world coordinates
-        left_fit_cr = np.polyfit(ploty * ym_per_pix, leftx * xm_per_pix, 2)
-        right_fit_cr = np.polyfit(ploty * ym_per_pix, rightx * xm_per_pix, 2)
+    h, w = bev_shape[0], bev_shape[1]
+    vehicle_center = w / 2.0
 
-        left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) \
-                        / np.absolute(2*left_fit_cr[0])
-        right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) \
-                         / np.absolute(2*right_fit_cr[0])
+    # Deviation at the bottom row (closest to the car)
+    y_bottom = h - 1
+    lane_center = (np.polyval(left_fit, y_bottom) + np.polyval(right_fit, y_bottom)) / 2.0
+    deviation_m = (vehicle_center - lane_center) * xm_per_pix
 
-        # Limit unreasonably large curvature values
-        max_reasonable_curve = 1000  # meters
-        if left_curverad > max_reasonable_curve or right_curverad > max_reasonable_curve:
-            left_curverad = min(left_curverad, max_reasonable_curve)
-            right_curverad = min(right_curverad, max_reasonable_curve)
+    # Detector jumped onto a neighbour lane
+    if abs(deviation_m) > lane_width_m / 2:
+        print(f"Deviation larger than half a lane: {deviation_m:.2f}m")
+        return None
+    if not check_offset_jump(deviation_m):
+        return None
 
-        # Calculate lane center and vehicle deviation
-        lane_center = (left_bottom + right_bottom) / 2.0
-        vehicle_center = binary_warped.shape[1] / 2.0  # Warped image center
-        
-        deviation_pixels = vehicle_center - lane_center
-        deviation_m = deviation_pixels * xm_per_pix
-        
-        # print(f"DEBUG: vehicle_center={vehicle_center:.1f}px, lane_center={lane_center:.1f}px, deviation_pixels={deviation_pixels:.1f}px")
-        # print(f"DEBUG: xm_per_pix={xm_per_pix:.4f}, lane_width_pix={lane_width_pix:.1f}px")
-        # print(f"DEBUG: deviation_m={deviation_m:.3f}m")
+    # Deviation at the lookahead distance, kept inside the warped region
+    near, far = get_roi_range(speed)
+    if lookahead_m is None:
+        lookahead_m = near
+    lookahead_m = float(np.clip(lookahead_m, near, far - 1.0))
+    y_ahead = bev_row_for_distance(lookahead_m, bev_shape, speed)
+    lane_center_ahead = (np.polyval(left_fit, y_ahead) + np.polyval(right_fit, y_ahead)) / 2.0
+    deviation_ahead_m = (vehicle_center - lane_center_ahead) * xm_per_pix
 
-        # Limit unreasonable deviation values
-        max_reasonable_deviation = 1.0
-        if abs(deviation_m) > max_reasonable_deviation:
-            print(f"Unreasonable deviation detected: {deviation_m:.2f}m, clipping to {max_reasonable_deviation:.2f}m")
-            deviation_m = np.clip(deviation_m, -max_reasonable_deviation, max_reasonable_deviation)
+    left_curverad = curvature_radius(left_fit, y_ahead, xm_per_pix, ym_per_pix)
+    right_curverad = curvature_radius(right_fit, y_ahead, xm_per_pix, ym_per_pix)
+    curverad = (left_curverad + right_curverad) / 2.0
 
-        return left_curverad, right_curverad, deviation_m, lane_center, vehicle_center, lane_width_pix
-        
-    except Exception as e:
-        print(f"Error in curvature calculation: {e}")
-        return None, None, None, None, None, None
-
-
-def process_deviation(raw_deviation, alpha=0.85, dead_zone=0.02, max_dev=1.5):
-    """
-    Process raw deviation for use in control systems.
-    Applies deadzone/scaling FIRST, then smoothing.
-    
-    Args:
-        raw_deviation: Raw deviation value from lane detection
-        alpha: Smoothing factor for exponential smoothing (higher = less smoothing, more responsive)
-        dead_zone: Minimum deviation threshold (reduced for earlier response)
-        max_dev: Maximum deviation for scaling
-        
-    Returns:
-        tuple: (smoothed_deviation, effective_deviation)
-    """
-    if raw_deviation is None:
-        raw_deviation = 0.0
-    
-    if not hasattr(process_deviation, 'previous_smoothed_deviation'):
-        process_deviation.previous_smoothed_deviation = 0.0
-    
-    # Apply deadzone and scaling FIRST to the raw deviation
-    effective_deviation = apply_deviation_deadzone_and_scaling(raw_deviation, dead_zone, max_dev)
-    
-    # Then smooth the effective deviation
-    smoothed_deviation = smooth_deviation(effective_deviation, alpha)
-    
-    process_deviation.previous_smoothed_deviation = smoothed_deviation
-    
-    return smoothed_deviation, effective_deviation
+    return {
+        'deviation': deviation_m,
+        'deviation_ahead': deviation_ahead_m,
+        'lookahead_m': lookahead_m,
+        'curvature_radius': curverad,
+        'lane_center': lane_center,
+        'vehicle_center': vehicle_center,
+        'lane_width': lane_width_pix,
+    }
