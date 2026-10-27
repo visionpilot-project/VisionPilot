@@ -16,7 +16,8 @@ A modular Python project for autonomous driving research and prototyping, fully 
 - **Traffic Sign**: Classification & Detection
 - **Traffic Lights**: Classification & Detection
 - **Multi-Class Object Detection**: Vehicles, pedestrians, cyclists and more
-- **Multi-Sensor Fusion**: Camera, Lidar, Radar, GPS, IMU<!-- - **Microservices Architecture**: Containerized multi-model inference (Docker), orchestrated via central aggregator -->
+- **Multi-Sensor Fusion**: Camera, Lidar, Radar, GPS, IMU
+<!-- - **Microservices Architecture**: Containerized multi-model inference (Docker), orchestrated via central aggregator -->
 - **Real-Time Control**: PID steering, cruise control (CC), automatic emergency braking (AEB)
 - **Visualization**: Real-time monitoring with Foxglove WebSocket + multiple CV windows
 - **Configuration System**: YAML-based modular settings
@@ -39,7 +40,6 @@ A modular Python project for autonomous driving research and prototyping, fully 
     - [Previous Lane Detection & Keeping (v1)](#previous-lane-detection--keeping-v1)
     - [Ultra-Fast Lane Detection (UFLD)](#ultra-fast-lane-detection-ufld)
     - [Foxglove Visualization](#foxglove-visualization)
-    - [Multi Camera Scene Segmentation](#multi-camera-scene-segmentation)
   - [Sensor Suite](#sensor-suite)
   <!-- - [Microservices Architecture](#microservices-architecture) -->
   - [Roadmap](#roadmap)
